@@ -93,6 +93,12 @@ jobs:
           /tmp/godot/godot --headless --script res://scripts/generate_assets.gd 2>&1 | tail -25
           ls -lh assets/
 
+      - name: 防反编译 — 剥离脚本注释和调试 print
+        run: |
+          /tmp/godot/godot --headless --script res://scripts/strip_scripts.gd 2>&1 | tail -5
+          echo "=== 剥离后脚本示例（前 5 行）==="
+          head -5 scripts/main.gd
+
       - name: 导入项目资源（生成 ETC2/ASTC 纹理 + 导入 PNG）
         run: |
           /tmp/godot/godot --headless --editor --quit 2>&1 | tail -3 || true

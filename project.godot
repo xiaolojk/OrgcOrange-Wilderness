@@ -83,3 +83,12 @@ common/physics_ticks_per_second=60
 
 G="*res://scripts/g.gd"
 Items="*res://scripts/items.gd"
+
+[debug]
+
+# 防反编译：关闭调试输出，运行时不打印路径
+settings/stdout/print_gpu_profile=false
+gdscript/warnings/untyped_declaration=0
+gdscript/warnings/unsafe_property_access=0
+gdscript/warnings/unsafe_method_access=0
+gdscript/warnings/unsafe_cast=0
