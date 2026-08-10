@@ -1,0 +1,113 @@
+name: 构建 Web 网页版
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一时间只跑一个 web 部署，避免冲突
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Godot 导出 Web
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 缓存 Godot
+        uses: actions/cache@v4
+        with:
+          path: |
+            /tmp/godot
+            ~/.local/share/godot/export_templates
+          key: godot-4.3-stable-web-v1
+
+      - name: 安装 Godot + 导出模板
+        run: |
+          set -e
+          GODOT_VERSION="4.3-stable"
+          mkdir -p /tmp/godot
+          if [ ! -f /tmp/godot/godot ]; then
+            wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip" -O /tmp/godot/godot.zip
+            unzip -o /tmp/godot/godot.zip -d /tmp/godot
+            mv /tmp/godot/Godot_v${GODOT_VERSION}_linux.x86_64 /tmp/godot/godot
+            chmod +x /tmp/godot/godot
+          fi
+          TPL_DIR="$HOME/.local/share/godot/export_templates/4.3.stable"
+          mkdir -p "$TPL_DIR"
+          if [ ! -f "$TPL_DIR/web_release.zip" ]; then
+            wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_export_templates.tpz" -O /tmp/godot/tpl.tpz
+            unzip -o /tmp/godot/tpl.tpz -d /tmp/godot/tpl
+            cp /tmp/godot/tpl/templates/web_debug.zip "$TPL_DIR/"
+            cp /tmp/godot/tpl/templates/web_release.zip "$TPL_DIR/"
+          fi
+          /tmp/godot/godot --version
+
+      - name: 配置 Godot editor settings
+        run: |
+          mkdir -p ~/.config/godot
+          /tmp/godot/godot --headless --editor --quit >/dev/null 2>&1 || true
+
+      - name: 生成应用图标 + 启动画面
+        run: |
+          /tmp/godot/godot --headless --script res://scripts/generate_icons.gd 2>&1 | tail -5
+          ls -lh icons/
+
+      - name: 生成游戏资源 PNG
+        run: |
+          /tmp/godot/godot --headless --script res://scripts/generate_assets.gd 2>&1 | tail -25
+          ls -lh assets/
+
+      - name: 防反编译 — 剥离脚本注释和调试 print
+        run: |
+          /tmp/godot/godot --headless --script res://scripts/strip_scripts.gd 2>&1 | tail -3 || true
+
+      - name: 导入项目资源
+        run: |
+          /tmp/godot/godot --headless --editor --quit 2>&1 | tail -3 || true
+
+      - name: 运行时验证
+        run: |
+          echo "=== 运行游戏 120 帧，捕获错误 ==="
+          timeout 30 /tmp/godot/godot --headless --path . --quit-after 120 2>&1 | tee runtime.log
+          if grep -q "SCRIPT ERROR\|Parse Error" runtime.log; then
+            echo "!!! 检测到脚本错误，构建失败 !!!"
+            grep -E "SCRIPT ERROR|Parse Error" runtime.log | head -10
+            exit 1
+          fi
+          echo "=== 运行时验证通过 ==="
+
+      - name: 导出 Web 版
+        run: |
+          set -e
+          mkdir -p build/web
+          /tmp/godot/godot --headless --export-release "Web" build/web/index.html
+          ls -lh build/web/
+          # 添加 .nojekyll 防止 GitHub Pages 忽略 _开头文件
+          touch build/web/.nojekyll
+
+      - name: 上传 Pages 产物
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    name: 部署到 GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 部署
+        id: deployment
+        uses: actions/deploy-pages@v4
