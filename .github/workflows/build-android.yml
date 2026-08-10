@@ -90,6 +90,11 @@ jobs:
       - name: 导出 APK
         run: |
           set -e
+          echo "=== 工作目录 ==="
+          pwd
+          echo "=== keystore 检查 ==="
+          ls -lh debug.keystore
+          file debug.keystore
           mkdir -p build
           /tmp/godot/godot --headless --export-release "Android" build/OrangeWilderness.apk
           ls -lh build/
