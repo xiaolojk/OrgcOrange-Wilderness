@@ -246,9 +246,11 @@ func _ensure_dir(path: String) -> void:
 		d.make_dir_recursive(path)
 
 func _save_sprite(key: String, path: String) -> void:
-	var img := _build_figure(key)
+	# 走 pixel_art 的增强流程（描边+高光+阴影+2x放大）
+	var pix := PixelArt.new()
+	var img := pix._build_figure(key)
 	img.save_png(path)
-	print("[Orgc] 已保存 %s (%dx%d)" % [path, img.get_width(), img.get_height()])
+	print("[Orgc] 已保存 %s (%dx%d, 增强版)" % [path, img.get_width(), img.get_height()])
 
 func _build_figure(key: String) -> Image:
 	var rows: Array = _pattern(key)
