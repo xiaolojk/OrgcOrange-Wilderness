@@ -37,8 +37,9 @@ func _ready() -> void:
 	_camera.zoom = Vector2(3, 3)  # 放大像素
 	_camera.position_smoothing_enabled = true
 	_camera.position_smoothing_speed = 6.0
-	_camera.make_current = true  # 确保相机启用
+	_camera.enabled = true  # 确保相机启用
 	player.add_child(_camera)
+	_camera.make_current()  # 设为当前相机
 
 	# 5. 生存系统
 	var survival: Node = SurvivalScript.new()
