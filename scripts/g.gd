@@ -3,6 +3,8 @@
 # Orgc橘子工作室 · 《橘子荒野》
 extends Node
 
+const PixelArtScript = preload("res://scripts/pixel_art.gd")
+
 var world: Node2D = null       # WorldSystem
 var player: CharacterBody2D = null
 var survival: Node = null      # SurvivalSystem
@@ -18,7 +20,11 @@ signal forge_complete(output_id)
 signal toast_shown(msg)
 
 func _ready() -> void:
-	pass  # pix 由 main 在启动时赋值
+	# 关键：Autoload 的 _ready 在所有场景节点之前执行，
+	# 在此初始化 pix，保证 player._ready 等场景节点能立即使用。
+	pix = PixelArtScript.new()
+	pix.name = "PixelArt"
+	add_child(pix)
 
 # 便捷：发浮动提示
 func toast(msg: String) -> void:

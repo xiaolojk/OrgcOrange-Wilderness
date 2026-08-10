@@ -9,6 +9,14 @@ config/name="橘子荒野"
 config/description="Orgc橘子工作室出品 · 像素风荒野生存开放世界"
 run/main_scene="res://scenes/Main.tscn"
 config/features=PackedStringArray("4.3", "GL Compatibility")
+config/icon="res://icons/icon.png"
+
+[boot_splash]
+
+show_image=true
+image="res://icons/splash.png"
+fullsize=false
+use_filter=false
 
 [display]
 
@@ -16,7 +24,7 @@ window/size/viewport_width=1280
 window/size/viewport_height=720
 window/stretch/mode="viewport"
 window/stretch/aspect="expand"
-window/handheld/orientation=1
+window/handheld/orientation=0
 
 [input]
 
@@ -65,7 +73,7 @@ config/organization="OrgcOrange"
 config/min_sdk=29
 config/target_sdk=34
 config/architectures="arm64-v8a|armeabi-v7a"
-config/orientation=1
+config/orientation=0
 
 [physics]
 

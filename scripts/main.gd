@@ -2,7 +2,6 @@
 # Orgc橘子工作室 · 《橘子荒野》
 extends Node2D
 
-const PixelArtScript    = preload("res://scripts/pixel_art.gd")
 const WorldScript       = preload("res://scripts/world.gd")
 const PlayerScript      = preload("res://scripts/player.gd")
 const SurvivalScript    = preload("res://scripts/survival.gd")
@@ -18,10 +17,7 @@ var _camera: Camera2D
 func _ready() -> void:
 	Engine.max_fps = 60
 
-	# 1. 像素图集（全局）
-	G.pix = PixelArtScript.new()
-	G.pix.name = "PixelArt"
-	add_child(G.pix)
+	# 1. 像素图集（已在 Autoload G._ready 中初始化，此处不再重复）
 
 	# 2. 世界
 	var world: Node2D = WorldScript.new()

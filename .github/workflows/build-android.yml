@@ -87,6 +87,11 @@ jobs:
         run: |
           /tmp/godot/godot --headless --editor --quit 2>&1 | tail -3 || true
 
+      - name: 生成应用图标 + 启动画面（程序化像素画）
+        run: |
+          /tmp/godot/godot --headless --script res://scripts/generate_icons.gd 2>&1 | tail -10
+          ls -lh icons/
+
       - name: 导出 APK（未签名）
         run: |
           set -e
