@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+	<title>橘子荒野 — Orgc橘子工作室</title>
+	<style>
+		* { margin: 0; padding: 0; box-sizing: border-box; }
+		html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1a1a; }
+		#game-container { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+		canvas { display: block; max-width: 100vw; max-height: 100vh; image-rendering: pixelated; }
+		#loading { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #1a1a1a; color: #e8a040; font-family: monospace; z-index: 100; }
+		#loading-bar { width: 60%; max-width: 400px; height: 8px; background: #333; border-radius: 4px; margin-top: 16px; overflow: hidden; }
+		#loading-fill { width: 0%; height: 100%; background: #e8a040; transition: width 0.2s; }
+		#loading-text { margin-top: 12px; font-size: 14px; color: #888; }
+		#error-box { position: fixed; inset: 0; display: none; padding: 20px; background: rgba(0,0,0,0.92); color: #ff6060; font-family: monospace; font-size: 12px; white-space: pre-wrap; overflow: auto; z-index: 200; }
+		#error-box h3 { color: #ff8080; margin-bottom: 10px; }
+	</style>
+</head>
+<body>
+	<div id="game-container">
+		<canvas id="canvas"></canvas>
+	</div>
+	<div id="loading">
+		<div style="font-size: 24px; font-weight: bold;">橘子荒野</div>
+		<div style="font-size: 12px; color: #666; margin-top: 4px;">Orgc橘子工作室</div>
+		<div id="loading-bar"><div id="loading-fill"></div></div>
+		<div id="loading-text">加载中... 0%</div>
+	</div>
+	<div id="error-box">
+		<h3>游戏启动失败 — 错误信息：</h3>
+		<div id="error-content"></div>
+		<div style="margin-top: 20px; color: #888;">请截图此错误发给开发者。按 F5 刷新重试。</div>
+	</div>
+
+	<script>
+		var engine = null;
+		var loading = document.getElementById('loading');
+		var loadingFill = document.getElementById('loading-fill');
+		var loadingText = document.getElementById('loading-text');
+		var errorBox = document.getElementById('error-box');
+		var errorContent = document.getElementById('error-content');
+
+		function showError(msg) {
+			errorContent.textContent += msg + "\n";
+			errorBox.style.display = 'block';
+			loading.style.display = 'none';
+		}
+
+		window.onerror = function(msg, url, line, col, err) {
+			showError("JS 错误: " + msg + "\n  at " + url + ":" + line + ":" + col);
+		};
+
+		var enginePromise = Engine.load("index.wasm");
+		enginePromise.then(function() {
+			loadingText.textContent = "初始化引擎...";
+			engine = new Engine({
+				args: [],
+				canvasResizePolicy: 1,
+				executable: "index",
+				canvas: document.getElementById("canvas"),
+				dynamicLibrary: "index.wasm",
+				mainPack: "index.pck",
+				focusCanvasOnStart: true
+			});
+
+			engine.startGame().then(function() {
+				loading.style.display = 'none';
+				console.log("[Orgc] 游戏启动成功");
+			}).catch(function(err) {
+				showError("引擎启动失败: " + (err && err.message ? err.message : err));
+				console.error("[Orgc] 启动失败:", err);
+			});
+		}).catch(function(err) {
+			showError("wasm 加载失败: " + (err && err.message ? err.message : err));
+		});
+
+		// 进度回调
+		if (typeof Engine !== 'undefined') {
+			Engine.setProgressFunc(function(current, total) {
+				var pct = Math.round((current / total) * 100);
+				loadingFill.style.width = pct + '%';
+				loadingText.textContent = '加载中... ' + pct + '%';
+			});
+		}
+	</script>
+
+	<script src="index.js"></script>
+</body>
+</html>

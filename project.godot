@@ -16,7 +16,7 @@ config/icon="res://icons/icon.png"
 show_image=true
 image="res://icons/splash.png"
 fullsize=false
-use_filter=false
+use_filter=true
 
 [display]
 
@@ -61,6 +61,7 @@ renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 textures/canvas_textures/default_texture_filter=0
 textures/vram_compression/import_etc2_astc=true
+textures/vram_compression/import_s3tc_bptc=true
 environment/defaults/default_clear_color=Color(0.16, 0.2, 0.26, 1)
 
 [android]
