@@ -87,22 +87,32 @@ jobs:
         run: |
           /tmp/godot/godot --headless --editor --quit 2>&1 | tail -3 || true
 
-      - name: 导出 APK
+      - name: 导出 APK（未签名）
         run: |
           set -e
-          echo "=== 工作目录 ==="
-          pwd
-          echo "=== keystore 检查 ==="
-          ls -lh debug.keystore
-          file debug.keystore
           mkdir -p build
-          /tmp/godot/godot --headless --export-release "Android" build/OrangeWilderness.apk
+          /tmp/godot/godot --headless --export-release "Android" build/OrangeWilderness-unsigned.apk
           ls -lh build/
-          # 验证 APK 已签名（vivo 等国产 ROM 拒绝未签名 APK）
+
+      - name: zipalign + apksigner 签名（vivo 等国产 ROM 必需）
+        run: |
+          set -e
+          BT="$ANDROID_HOME/build-tools/34.0.0"
+          echo "=== zipalign 对齐 ==="
+          "$BT/zipalign" -f -v 4 build/OrangeWilderness-unsigned.apk build/OrangeWilderness.apk 2>&1 | tail -2
+          echo "=== apksigner 签名 ==="
+          "$BT/apksigner" sign \
+            --ks debug.keystore \
+            --ks-key-alias androiddebugkey \
+            --ks-pass pass:android \
+            --key-pass pass:android \
+            build/OrangeWilderness.apk
           echo "=== 签名验证 ==="
-          jarsigner -verify -verbose build/OrangeWilderness.apk 2>&1 | tail -5
-          echo "=== APK 信息 ==="
-          unzip -l build/OrangeWilderness.apk | grep -E "\.so$" || true
+          "$BT/apksigner" verify --verbose build/OrangeWilderness.apk 2>&1 | head -10
+          echo "=== APK 架构 ==="
+          unzip -l build/OrangeWilderness.apk | grep -E "\.so$"
+          rm -f build/OrangeWilderness-unsigned.apk
+          ls -lh build/
 
       - name: 上传 APK 构建产物
         uses: actions/upload-artifact@v4
