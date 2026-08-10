@@ -28,15 +28,213 @@ const PAL := {
 
 func _init() -> void:
 	_ensure_dir("res://assets")
-	# 1. 生成所有精灵 PNG
+	# 1. 生成所有精灵 PNG（16x16）
 	var sprites := ["player","wood","stone","fiber","iron_ore","charcoal","iron_ingot",
 		"berry","meat","water","iron_blade","purify_amulet","tree","bush","rock","anvil"]
 	for key in sprites:
 		_save_sprite(key, "res://assets/%s.png" % key)
-	# 2. 生成地图 PNG（固定种子，与 world.gd 一致）
+	# 2. 生成建筑物 PNG（32x32，比普通精灵大）
+	var buildings := ["house","tent","campfire","well","fence"]
+	for key in buildings:
+		_save_building(key, "res://assets/%s.png" % key)
+	# 3. 生成 NPC PNG（16x16，不同颜色服装）
+	var npcs := ["npc_villager","npc_merchant","npc_hunter"]
+	for key in npcs:
+		_save_sprite(key, "res://assets/%s.png" % key)
+	# 4. 生成地图 PNG（固定种子，与 world.gd 一致）
 	_save_map("res://assets/map.png")
 	print("[Orgc] 所有资源 PNG 已生成到 res://assets/")
 	quit()
+
+func _save_building(key: String, path: String) -> void:
+	var img := _build_building(key)
+	img.save_png(path)
+	print("[Orgc] 已保存 %s (%dx%d)" % [path, img.get_width(), img.get_height()])
+
+# 32x32 建筑物图案
+func _build_building(key: String) -> Image:
+	var rows: Array = _building_pattern(key)
+	var h: int = rows.size()
+	var w: int = rows[0].length() if h > 0 else 32
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	for y in range(h):
+		var row: String = rows[y]
+		for x in range(w):
+			var ch := " "
+			if x < row.length():
+				ch = row[x]
+			var c: Color = PAL.get(ch, Color(0,0,0,0))
+			img.set_pixel(x, y, c)
+	return img
+
+func _building_pattern(key: String) -> Array:
+	match key:
+		"house": return [
+			"        rrrrrrrr        ",
+			"       rRRRRRRRRr       ",
+			"      rRRRRRRRRRRr      ",
+			"     rRRRRRRRRRRRRr     ",
+			"    rRRRRRRRRRRRRRRr    ",
+			"   rRRRRRRRRRRRRRRRRr   ",
+			"  rRRRRRRRRRRRRRRRRRRr  ",
+			" rRRRRRRRRRRRRRRRRRRRRr ",
+			"  WWWWWWWWWWWWWWWWWWWW  ",
+			"  W##################W  ",
+			"  W##WWWWWWWWWWWWWW##W  ",
+			"  W##WsssssssssssW##W  ",
+			"  W##WssSSSSSSSssW##W  ",
+			"  W##WssSSSSSSSssW##W  ",
+			"  W##WssSSSSSSSssW##W  ",
+			"  W##WWWWWWWWWWWW##W  ",
+			"  W##################W  ",
+			"  W##WWWWWW##WWWWW##W  ",
+			"  W##WWWWWW##WWWWW##W  ",
+			"  W##WWWWWWWWWWWWW##W  ",
+			"  W##################W  ",
+			"  WWWWWWWWWWWWWWWWWWWW  ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        "]
+		"tent": return [
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"           c            ",
+			"          ccc           ",
+			"         ccccc          ",
+			"        ccccccc         ",
+			"       ccccccccc        ",
+			"      cccccccccc        ",
+			"     cccccccccccc       ",
+			"    cccccccccccccc      ",
+			"   cccccccccccccccc     ",
+			"  cccccccccccccccccc    ",
+			" ccccccccccccccccccccc   ",
+			"ccccccccccccccccccccccccc",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        "]
+		"campfire": return [
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"           x            ",
+			"          xxx           ",
+			"         xxxxx          ",
+			"          xxx           ",
+			"        WWWWWWW         ",
+			"       WWWWWWWWW        ",
+			"      WWkkkkkkkWW       ",
+			"       WWWWWWWWW        ",
+			"        WWWWWWW         ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        "]
+		"well": return [
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"     d          d       ",
+			"    ddd        ddd      ",
+			"   dddAAAAAAAAAdddd     ",
+			"   dAAAAAAAAAAAAAAd     ",
+			"   dAqqqqqqqqqqqAd     ",
+			"   dAqQQQQQQQQQqAd     ",
+			"   dAqQQQQQQQQQqAd     ",
+			"   dAqQQQQQQQQQqAd     ",
+			"   dAqqqqqqqqqqqAd     ",
+			"   dAAAAAAAAAAAAAAd     ",
+			"   dddddddddddddddd     ",
+			"    dddddddddddddd      ",
+			"     dddddddddddd       ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        "]
+		"fence": return [
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"  W     W     W     W   ",
+			"  W     W     W     W   ",
+			"  W     W     W     W   ",
+			"  WWWWWWWWWWWWWWWWWWW   ",
+			"  W     W     W     W   ",
+			"  W     W     W     W   ",
+			"  WWWWWWWWWWWWWWWWWWW   ",
+			"  W     W     W     W   ",
+			"  W     W     W     W   ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        "]
+		_: return _pattern("anvil")
 
 func _ensure_dir(path: String) -> void:
 	var d := DirAccess.open("res://")
@@ -60,7 +258,8 @@ func _build_figure(key: String) -> Image:
 			if x < row.length():
 				ch = row[x]
 			var c: Color = PAL.get(ch, Color(0,0,0,0))
-			img.set_pixel(x, h-1-y, c)
+			# PNG y=0 在顶部，图案数组第0行也是顶部，无需翻转
+			img.set_pixel(x, y, c)
 	return img
 
 # ============ 地图生成（与 world.gd 逻辑一致，固定种子） ============
@@ -438,6 +637,57 @@ func _pattern(key: String) -> Array:
 			"                ",
 			"                ",
 			"                "]
+		"npc_villager": return [
+			"                ",
+			"     hhhhh      ",
+			"    hhHHHhh     ",
+			"    hHHHHHh     ",
+			"    sssSsss     ",
+			"    s s s s     ",
+			"   #bbbbbbb#    ",
+			"  #bBBBBBBBb#   ",
+			"  #bBBBBBBBb#   ",
+			"  #bBBBbBBBb#   ",
+			"   #bbbbbbb#    ",
+			"    pppppp      ",
+			"    pPppPp      ",
+			"    pPppPp      ",
+			"    PP  PP      ",
+			"    SS  SS      "]
+		"npc_merchant": return [
+			"                ",
+			"     hhhhh      ",
+			"    hhHHHhh     ",
+			"    hHHHHHh     ",
+			"    sssSsss     ",
+			"    s s s s     ",
+			"   #mmmmmmm#    ",
+			"  #mMMMMMMMm#   ",
+			"  #mMMMMMMMm#   ",
+			"  #mMMMmMMMm#   ",
+			"   #mmmmmmm#    ",
+			"    pppppp      ",
+			"    pPppPp      ",
+			"    pPppPp      ",
+			"    PP  PP      ",
+			"    SS  SS      "]
+		"npc_hunter": return [
+			"                ",
+			"     HHHHH      ",
+			"    HHhhhHH     ",
+			"    HhhhhhH     ",
+			"    sssSsss     ",
+			"    s s s s     ",
+			"   #ggggggg#    ",
+			"  #gGGGGGGGg#   ",
+			"  #gGGGGGGGg#   ",
+			"  #gGGGgGGGg#   ",
+			"   #ggggggg#    ",
+			"    pppppp      ",
+			"    pPppPp      ",
+			"    pPppPp      ",
+			"    PP  PP      ",
+			"    SS  SS      "]
 		_: return [
 			"                ",
 			"    ########    ",

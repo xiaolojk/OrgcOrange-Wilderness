@@ -17,11 +17,13 @@ func _ready() -> void:
 	sprite = Sprite2D.new()
 	sprite.texture = G.pix.get_sprite("player")
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	sprite.centered = true
+	sprite.scale = Vector2(2, 2)  # 放大玩家
 	add_child(sprite)
 	# 碰撞
 	var col := CollisionShape2D.new()
 	var rect := RectangleShape2D.new()
-	rect.size = Vector2(14, 14)
+	rect.size = Vector2(20, 20)
 	col.shape = rect
 	add_child(col)
 

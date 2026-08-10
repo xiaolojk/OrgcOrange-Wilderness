@@ -19,10 +19,13 @@ func _ready() -> void:
 	_sprite = Sprite2D.new()
 	_sprite.texture = G.pix.get_sprite(_sprite_key())
 	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_sprite.centered = true
+	# 放大 2 倍，让物品更醒目
+	_sprite.scale = Vector2(2, 2)
 	add_child(_sprite)
 	var col := CollisionShape2D.new()
 	var rect := RectangleShape2D.new()
-	rect.size = Vector2(32, 32)
+	rect.size = Vector2(48, 48)
 	col.shape = rect
 	add_child(col)
 	add_to_group("interactable")

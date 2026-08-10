@@ -11,6 +11,8 @@ const UIScript          = preload("res://scripts/ui.gd")
 const TouchScript       = preload("res://scripts/touch_controls.gd")
 const ForgePanelScript  = preload("res://scripts/forge_panel.gd")
 const ResourceNodeScript= preload("res://scripts/resource_node.gd")
+const BuildingScript    = preload("res://scripts/buildings.gd")
+const NPCScript         = preload("res://scripts/npc.gd")
 
 var _camera: Camera2D
 
@@ -85,17 +87,30 @@ func _ready() -> void:
 	add_child(anvil)
 	G.forge = anvil
 
-	# 8. 任务系统
+	# 8. 建筑物系统（房屋、帐篷、篝火等）
+	var buildings: Node2D = BuildingScript.new()
+	buildings.name = "Buildings"
+	add_child(buildings)
+
+	# 9. NPC 系统（村民、商人、猎人）
+	var npcs: Node2D = NPCScript.new()
+	npcs.name = "NPCs"
+	add_child(npcs)
+
+	# 10. 任务系统
 	var quest: Node = QuestScript.new()
 	quest.name = "Quest"
 	add_child(quest)
 	G.quest = quest
 
-	# 9. UI 层
+	# 11. UI 层
 	var ui: CanvasLayer = UIScript.new()
 	ui.name = "HUD"
 	add_child(ui)
 	G.ui = ui
+
+	# 12. 屏幕中心准星
+	_spawn_crosshair(ui)
 
 	# 触屏控制
 	var touch: CanvasLayer = TouchScript.new()
@@ -169,3 +184,36 @@ func _process(_dt: float) -> void:
 	# 手动让相机跟随玩家（不依赖 position_smoothing）
 	if _camera != null and G.player != null:
 		_camera.position = G.player.position
+
+func _spawn_crosshair(parent: CanvasLayer) -> void:
+	# 屏幕中心准星（十字形）
+	var container := Control.new()
+	container.set_anchors_preset(Control.PRESET_FULL_RECT)
+	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(container)
+	# 用两个 ColorRect 组成十字
+	var h_line := ColorRect.new()
+	h_line.color = Color(1, 1, 1, 0.7)
+	h_line.anchor_left = 0.5; h_line.anchor_right = 0.5
+	h_line.anchor_top = 0.5; h_line.anchor_bottom = 0.5
+	h_line.offset_left = -10; h_line.offset_right = 10
+	h_line.offset_top = -1; h_line.offset_bottom = 1
+	h_line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	container.add_child(h_line)
+	var v_line := ColorRect.new()
+	v_line.color = Color(1, 1, 1, 0.7)
+	v_line.anchor_left = 0.5; v_line.anchor_right = 0.5
+	v_line.anchor_top = 0.5; v_line.anchor_bottom = 0.5
+	v_line.offset_left = -1; v_line.offset_right = 1
+	v_line.offset_top = -10; v_line.offset_bottom = 10
+	v_line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	container.add_child(v_line)
+	# 中心点
+	var dot := ColorRect.new()
+	dot.color = Color(1, 0.8, 0.2, 0.9)
+	dot.anchor_left = 0.5; dot.anchor_right = 0.5
+	dot.anchor_top = 0.5; dot.anchor_bottom = 0.5
+	dot.offset_left = -2; dot.offset_right = 2
+	dot.offset_top = -2; dot.offset_bottom = 2
+	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	container.add_child(dot)

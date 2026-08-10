@@ -22,10 +22,12 @@ func _ready() -> void:
 	var sprite := Sprite2D.new()
 	sprite.texture = G.pix.get_sprite("anvil")
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	sprite.centered = true
+	sprite.scale = Vector2(2, 2)  # 放大铁砧
 	add_child(sprite)
 	var col := CollisionShape2D.new()
 	var rect := RectangleShape2D.new()
-	rect.size = Vector2(44, 36)
+	rect.size = Vector2(48, 40)
 	col.shape = rect
 	add_child(col)
 	add_to_group("interactable")
