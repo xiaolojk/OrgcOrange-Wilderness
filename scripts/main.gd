@@ -25,12 +25,24 @@ func _ready() -> void:
 	add_child(world)
 	G.world = world
 
-	# 3. 玩家
+	# 3. 玩家（放在地图中心附近的草地）
 	var player: CharacterBody2D = PlayerScript.new()
 	player.name = "Player"
-	player.position = Vector2.ZERO
+	# 找一个 grass/dirt 位置，避免玩家出生在水里
+	var spawn := Vector2.ZERO
+	for r in range(0, 200, 8):
+		for a in range(0, 360, 30):
+			var p := Vector2(cos(deg_to_rad(a)), sin(deg_to_rad(a))) * r
+			var t: String = world.tile_type_at(p)
+			if t == "grass" or t == "grass2" or t == "dirt":
+				spawn = p
+				break
+		if spawn != Vector2.ZERO:
+			break
+	player.position = spawn
 	add_child(player)
 	G.player = player
+	print("[Orgc] 玩家出生点：", spawn, " 地形=", world.tile_type_at(spawn))
 
 	# 4. 相机（必须 add_child 后再 make_current，且用 deferred 确保 scene tree 就绪）
 	_camera = Camera2D.new()

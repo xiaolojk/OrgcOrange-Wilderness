@@ -99,10 +99,29 @@ func _build_map_sprite() -> void:
 			var dst_x := (x - half) * TILE_PX + map_size / 2
 			var dst_y := (y - half) * TILE_PX + map_size / 2
 			map_img.blit_rect(tile_img, Rect2i(0, 0, TILE_PX, TILE_PX), Vector2i(dst_x, dst_y))
+	print("[Orgc] 地图 Image 创建完成，尺寸=%dx%d 格式=%d" % [map_img.get_width(), map_img.get_height(), map_img.get_format()])
 
 	# 创建纹理 + Sprite2D
-	var tex := ImageTexture.new()
-	tex.create_from_image(map_img)
+	# 方案：保存为 PNG 再用 load_resource 加载，确保纹理在所有平台有效
+	var tex: Texture2D
+	var png_path := "user://map_cache.png"
+	map_img.save_png(png_path)
+	print("[Orgc] 地图已保存到 %s" % png_path)
+	# 用 ImageTexture.create_from_image 创建（Android 上有 GPU 上下文，应有效）
+	var img_tex := ImageTexture.new()
+	img_tex.create_from_image(map_img)
+	if img_tex.get_width() > 0 and img_tex.get_height() > 0:
+		tex = img_tex
+		print("[Orgc] ImageTexture 创建成功，尺寸=%dx%d" % [tex.get_width(), tex.get_height()])
+	else:
+		# 回退：重新从 PNG 加载 Image 再创建纹理
+		print("[Orgc] ImageTexture.create_from_image 返回 0x0，回退到从 PNG 重新加载")
+		var reloaded := Image.new()
+		reloaded.load(png_path)
+		img_tex = ImageTexture.new()
+		img_tex.create_from_image(reloaded)
+		tex = img_tex
+		print("[Orgc] 从 PNG 重新加载后纹理尺寸=%dx%d" % [tex.get_width(), tex.get_height()])
 	_map_sprite = Sprite2D.new()
 	_map_sprite.texture = tex
 	_map_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
