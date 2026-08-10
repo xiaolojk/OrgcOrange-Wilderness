@@ -53,14 +53,14 @@ func _create_npc(npc_type: String, pos: Vector2, npc_name: String, dialog: Strin
 	sprite.texture = G.pix.get_sprite(npc_type)
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	sprite.centered = true
-	sprite.scale = Vector2(2, 2)  # 增强后 32x32
+	sprite.scale = Vector2(1, 1)  # 32x32 增强图，1x 显示
 	npc.add_child(sprite)
 	# 第二帧（动作）— key 加 "2"
 	var sprite2 := Sprite2D.new()
 	sprite2.texture = G.pix.get_sprite(npc_type + "2")
 	sprite2.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	sprite2.centered = true
-	sprite2.scale = Vector2(2, 2)
+	sprite2.scale = Vector2(1, 1)
 	sprite2.visible = false
 	npc.add_child(sprite2)
 	# 名字标签（悬浮头顶）

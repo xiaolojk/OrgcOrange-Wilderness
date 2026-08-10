@@ -53,8 +53,8 @@ func _add_building(btype: String, pos: Vector2, sc: Vector2) -> void:
 	building.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	building.position = pos
 	building.centered = true
-	# 增强后 48x48，缩小到合适尺寸
-	building.scale = sc * 0.8
+	# 增强后 48x48，缩小到星露谷比例（约 1.5-2 瓦片）
+	building.scale = sc * 0.4
 	building.z_index = 5
 	add_child(building)
 	_buildings.append(building)

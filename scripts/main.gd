@@ -27,6 +27,7 @@ func _ready() -> void:
 	var bg_rect := ColorRect.new()
 	bg_rect.color = Color(0.16, 0.2, 0.26, 1)  # 深蓝绿，与默认 clear color 一致
 	bg_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE  # 关键：不挡触摸事件
 	bg_layer.add_child(bg_rect)
 
 	# 1. 像素图集（已在 Autoload G._ready 中初始化，此处不再重复）
@@ -64,7 +65,7 @@ func _ready() -> void:
 
 	# 4. 相机（直接作为 main 子节点，手动跟随玩家，最可靠）
 	_camera = Camera2D.new()
-	_camera.zoom = Vector2(2, 2)  # 降低放大倍数，避免视野过小
+	_camera.zoom = Vector2(1, 1)  # 1x 缩放，视野更宽更像星露谷
 	_camera.position_smoothing_enabled = false  # 关闭平滑，手动跟随
 	_camera.enabled = true
 	_camera.position = spawn  # 初始位置对齐玩家
@@ -171,7 +172,7 @@ func _find_town_center(world: Node2D, spawn: Vector2) -> Vector2:
 	# 候选方向：东南、东北、西南、西北（避免正好在出生点上方）
 	for angle_deg in [45, 135, 225, 315]:
 		var a := deg_to_rad(angle_deg)
-		for r in range(220, 340, 20):
+		for r in range(400, 620, 20):
 			candidates.append(spawn + Vector2(cos(a), sin(a)) * r)
 	for pos in candidates:
 		var t: String = world.tile_type_at(pos)

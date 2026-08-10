@@ -31,29 +31,29 @@ func _build() -> void:
 	_health_fill  = _make_bar("生命", Color(0.85,0.20,0.25), 3)
 
 	# 右上：品牌
-	_brand = _make_label("橘子荒野\nOrgc橘子工作室", 18, Color(1,0.7,0.3))
+	_brand = _make_label("橘子荒野\nOrgc橘子工作室", 22, Color(1,0.7,0.3))
 	_brand.anchor_left = 1; _brand.anchor_right = 1
 	_brand.anchor_top = 0; _brand.anchor_bottom = 0
-	_brand.offset_left = -180; _brand.offset_right = -20
-	_brand.offset_top = 20; _brand.offset_bottom = 60
+	_brand.offset_left = -200; _brand.offset_right = -20
+	_brand.offset_top = 20; _brand.offset_bottom = 70
 	_brand.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
 	# 右上下：时钟
-	_clock = _make_label("晴 · 清晨", 20, Color.WHITE)
+	_clock = _make_label("晴 · 清晨", 24, Color.WHITE)
 	_clock.anchor_left = 1; _clock.anchor_right = 1
-	_clock.offset_left = -180; _clock.offset_right = -20
-	_clock.offset_top = 65; _clock.offset_bottom = 95
+	_clock.offset_left = -200; _clock.offset_right = -20
+	_clock.offset_top = 75; _clock.offset_bottom = 110
 	_clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
 	# 顶部中央：任务目标
-	_objective = _make_label("", 20, Color(1,0.95,0.7))
+	_objective = _make_label("", 24, Color(1,0.95,0.7))
 	_objective.anchor_left = 0.5; _objective.anchor_right = 0.5
-	_objective.offset_left = -260; _objective.offset_right = 260
-	_objective.offset_top = 15; _objective.offset_bottom = 80
+	_objective.offset_left = -300; _objective.offset_right = 300
+	_objective.offset_top = 15; _objective.offset_bottom = 90
 	_objective.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 	# 底部中央：浮动提示
-	_toast = _make_label("", 24, Color.WHITE)
+	_toast = _make_label("", 28, Color.WHITE)
 	_toast.anchor_left = 0.5; _toast.anchor_right = 0.5
 	_toast.anchor_top = 1; _toast.anchor_bottom = 1
 	_toast.offset_left = -360; _toast.offset_right = 360
