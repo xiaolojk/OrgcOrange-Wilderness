@@ -37,6 +37,7 @@ func _ready() -> void:
 	_camera.zoom = Vector2(3, 3)  # 放大像素
 	_camera.position_smoothing_enabled = true
 	_camera.position_smoothing_speed = 6.0
+	_camera.make_current = true  # 确保相机启用
 	player.add_child(_camera)
 
 	# 5. 生存系统
@@ -115,8 +116,7 @@ func _find_valid_pos(world: Node2D, center: Vector2) -> Vector2:
 		var r := randf_range(40.0, 240.0)
 		var a := randf() * TAU
 		var p := center + Vector2(cos(a), sin(a)) * r
-		var cell: Vector2i = world.world_to_cell(p)
-		var t: String = world.tile_type_at(cell)
+		var t: String = world.tile_type_at(p)
 		if t == "grass" or t == "dirt" or t == "sand":
 			if p.distance_to(center) > 25.0:
 				return p
