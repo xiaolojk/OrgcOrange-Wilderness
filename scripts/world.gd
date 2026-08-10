@@ -27,8 +27,8 @@ signal weather_changed(w)
 func _ready() -> void:
 	_build_tile_textures()
 	_generate_terrain()
-	# 设置可绘制区域足够大
-	z_index = -10
+	visible = true  # 确保可见
+	z_index = 0  # 正常层级（不要负值，避免被相机剔除）
 
 func is_night() -> bool:
 	return time_of_day < 0.22 or time_of_day > 0.78

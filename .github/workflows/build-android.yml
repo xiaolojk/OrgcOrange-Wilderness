@@ -95,7 +95,7 @@ jobs:
       - name: 运行时验证（headless 运行捕获脚本错误）
         run: |
           echo "=== 运行游戏 120 帧，捕获错误 ==="
-          timeout 30 /tmp/godot/godot --headless --path . --quit-after 120 2>&1 | tee runtime.log | head -80
+          timeout 30 /tmp/godot/godot --headless --path . --quit-after 120 2>&1 | tee runtime.log
           echo "=== 脚本错误统计 ==="
           grep -c "SCRIPT ERROR\|Parse Error" runtime.log || echo "0 script errors"
           if grep -q "SCRIPT ERROR\|Parse Error" runtime.log; then
@@ -104,6 +104,8 @@ jobs:
             exit 1
           fi
           echo "=== 运行时验证通过 ==="
+          echo "--- Orgc 诊断日志 ---"
+          grep "\[Orgc\]" runtime.log || echo "(无诊断日志)"
           echo "--- 引擎级警告/错误（非致命，仅供参考）---"
           grep -E "^ERROR:" runtime.log | head -5 || echo "(无)"
 
