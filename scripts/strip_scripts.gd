@@ -51,7 +51,7 @@ func _strip_file(path: String) -> void:
 			var before := line.substr(0, hash_idx)
 			var quote_count := before.count('"')
 			if quote_count % 2 == 0:
-				line = before.rstrip()
+				line = before.rstrip(" \t")
 		out.append(line)
 	var new_content := "\n".join(out)
 	# 压缩多余空行

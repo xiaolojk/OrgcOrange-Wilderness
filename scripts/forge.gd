@@ -23,7 +23,7 @@ func _ready() -> void:
 	sprite.texture = G.pix.get_sprite("anvil")
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	sprite.centered = true
-	sprite.scale = Vector2(1.5, 1.5)  # HQ 图 64x64
+	sprite.scale = Vector2(2, 2)  # 增强后 32x32
 	add_child(sprite)
 	var col := CollisionShape2D.new()
 	var rect := RectangleShape2D.new()

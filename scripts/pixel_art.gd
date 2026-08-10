@@ -1,6 +1,6 @@
 # pixel_art.gd — 像素画图集（星露谷物语风格化调色）
 # CI 时预生成 PNG 到 res://assets/，运行时用 load() 加载
-# （ImageTexture.create_from_image 在 Android 上不可靠，改用编辑器导入的纹理）
+# 程序化添加描边 + 高光 + 阴影 + 2x 放大，提升画质
 # Orgc橘子工作室 · 《橘子荒野》
 class_name PixelArt
 extends Node
@@ -24,7 +24,6 @@ func get_sprite(key: String) -> Texture2D:
 # ============ 瓦片（程序化噪点 + 描边） ============
 func _build_tile(name: String) -> Image:
 	var img := Image.create(PX, PX, false, Image.FORMAT_RGBA8)
-	# 星露谷式柔和饱和调色：基色 / 描边
 	var cfg: Array = _tile_colors(name)
 	var base: Color = cfg[0]
 	var edge: Color = cfg[1]
@@ -56,7 +55,7 @@ func _tile_colors(name: String) -> Array:
 		"ash":    return [Color(0.38,0.34,0.38), Color(0.24,0.22,0.25)]
 		_:        return [Color(0.63,0.63,0.63), Color(0.39,0.39,0.39)]
 
-# ============ 角色/物品（ASCII 调色板手绘） ============
+# ============ 调色板 ============
 const PAL := {
 	" ": Color(0,0,0,0),
 	"#": Color(0.10,0.10,0.12,1),
@@ -76,6 +75,7 @@ const PAL := {
 	"u": Color(0.86,0.56,0.50,1), "U": Color(0.66,0.36,0.32,1),
 }
 
+# ============ 角色/物品（ASCII 调色板手绘 + 程序化增强） ============
 func _build_figure(key: String) -> Image:
 	var rows: Array = _pattern(key)
 	var h: int = rows.size()
@@ -88,9 +88,228 @@ func _build_figure(key: String) -> Image:
 			if x < row.length():
 				ch = row[x]
 			var c: Color = PAL.get(ch, Color(0,0,0,0))
-			# 像素画惯例：第0行为顶部，纹理顶部 = y 最大
 			img.set_pixel(x, h-1-y, c)
-	return img
+	# 程序化增强：描边 + 高光 + 阴影 + 2x 放大
+	return _enhance_pixel_art(img)
+
+# 增强像素画：添加描边、高光、阴影，然后 2x 放大
+func _enhance_pixel_art(img: Image) -> Image:
+	var w := img.get_width()
+	var h := img.get_height()
+	# 1. 添加描边：在非透明像素的外围透明位置画深色轮廓
+	var outlined := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	outlined.fill(Color(0,0,0,0))
+	var outline_color := Color(0.06, 0.04, 0.08, 1.0)
+	for y in range(h):
+		for x in range(w):
+			var c := img.get_pixel(x, y)
+			if c.a > 0:
+				outlined.set_pixel(x, y, c)
+			else:
+				var has_neighbor := false
+				for dx in [-1, 0, 1]:
+					for dy in [-1, 0, 1]:
+						if dx == 0 and dy == 0: continue
+						var nx := x + dx
+						var ny := y + dy
+						if nx >= 0 and nx < w and ny >= 0 and ny < h:
+							if img.get_pixel(nx, ny).a > 0:
+								has_neighbor = true
+								break
+					if has_neighbor: break
+				if has_neighbor:
+					outlined.set_pixel(x, y, outline_color)
+	# 2. 高光：顶部 1/3 的非透明像素亮度提升
+	var enhanced := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	enhanced.fill(Color(0,0,0,0))
+	for y in range(h):
+		for x in range(w):
+			var c := outlined.get_pixel(x, y)
+			if c.a > 0:
+				if y < h / 3:
+					# 高光区：亮度 +18%
+					c.r = clamp(c.r * 1.18, 0, 1)
+					c.g = clamp(c.g * 1.18, 0, 1)
+					c.b = clamp(c.b * 1.18, 0, 1)
+				elif y > h * 2 / 3:
+					# 阴影区：亮度 -15%
+					c.r = clamp(c.r * 0.85, 0, 1)
+					c.g = clamp(c.g * 0.85, 0, 1)
+					c.b = clamp(c.b * 0.85, 0, 1)
+				enhanced.set_pixel(x, y, c)
+	# 3. 2x 放大，保持像素感
+	enhanced.resize(w * 2, h * 2, Image.INTERPOLATE_NEAREST)
+	return enhanced
+
+# 建筑物也走增强流程
+func _build_building_figure(key: String) -> Image:
+	var rows: Array = _building_pattern(key)
+	var h: int = rows.size()
+	var w: int = rows[0].length()
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	for y in range(h):
+		var row: String = rows[y]
+		for x in range(w):
+			var ch := " "
+			if x < row.length():
+				ch = row[x]
+			var c: Color = PAL.get(ch, Color(0,0,0,0))
+			img.set_pixel(x, h-1-y, c)
+	return _enhance_pixel_art(img)
+
+# 建筑物图案（24x24，比普通精灵大）
+func _building_pattern(key: String) -> Array:
+	match key:
+		"house": return [
+			"                        ",
+			"                        ",
+			"          rrrr          ",
+			"         rRRRRr         ",
+			"        rRRrrRRr        ",
+			"       rRRrrrrRRr       ",
+			"      rRRrrrrrrRRr      ",
+			"     rRRrrrrrrrrRRr     ",
+			"    rRRrrrrrrrrrrRRr    ",
+			"   rRRrrrrrrrrrrrrRRr   ",
+			"  rRRrrrrrrrrrrrrrrRRr  ",
+			" rrrrrrrrrrrrrrrrrrrrr  ",
+			"  WWWWWWWWWWWWWWWWWWWW  ",
+			"  WlllllllllllllllllW  ",
+			"  WlllllllllllllllllW  ",
+			"  WlllllllllllllllllW  ",
+			"  WlllllWWWWWWllllllW  ",
+			"  WlllllWlllllWllllllW  ",
+			"  WlllllWlllllWllllllW  ",
+			"  WlllllWWWWWWWlllllW  ",
+			"  WlllllllllllllllllW  ",
+			"  WWWWlllllllllllWWWW  ",
+			"  WWWWlllllllllllWWWW  ",
+			"  WWWWlllllllllllWWWW  "]
+		"tent": return [
+			"                        ",
+			"                        ",
+			"                        ",
+			"           w            ",
+			"          www           ",
+			"         wWwww          ",
+			"        wWwwwww         ",
+			"       wwwWwwwww        ",
+			"      wwwWwwwwwww       ",
+			"     wwwwWwwwwwwww      ",
+			"    wwwwwWwwwwwwwwww    ",
+			"   wwwwwwWwwwwwwwwwww   ",
+			"  wwwwwwwWwwwwwwwwwwww  ",
+			" wwwwwwwwWwwwwwwwwwwwww ",
+			" llllllllllllllllllllll ",
+			" llllllllllllllllllllll ",
+			" llllllllllllllllllllll ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        "]
+		"campfire": return [
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"           x            ",
+			"          xxx           ",
+			"         xMxMx          ",
+			"        xMMMxMx         ",
+			"         xMxMMx         ",
+			"          xMx           ",
+			"           x            ",
+			"      WWWWWWWWWW        ",
+			"     WllllllllllW       ",
+			"    WllllllllllllW      ",
+			"   WWWWWWWWWWWWWWWW     ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        "]
+		"well": return [
+			"                        ",
+			"                        ",
+			"     WWW      WWW       ",
+			"    WlllW    WlllW      ",
+			"   WlllllWWWWWWlllW     ",
+			"   WllllllllllllllW     ",
+			"    WllllllllllllW      ",
+			"     WllllllllllW       ",
+			"      WqqqqqqqqW        ",
+			"       WQQQQQQW         ",
+			"        WqqqqW          ",
+			"     WWWWWWWWWWWW       ",
+			"    WllllllllllllW      ",
+			"   WllllllllllllllW     ",
+			"  WWWWWWWWWWWWWWWWWW    ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        "]
+		"fence": return [
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"           w            ",
+			"           w            ",
+			"       wWwwWw           ",
+			"        wwww            ",
+			"       wWwwWw           ",
+			"        wwww            ",
+			"       wWwwWw           ",
+			"        wwww            ",
+			"       wWwwWw           ",
+			"        wwww            ",
+			"       wWwwWw           ",
+			"       WWWWWW           ",
+			"       llllll           ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        "]
+		_: return [
+			"                        ",
+			"                        ",
+			"      ##########        ",
+			"     #..........#       ",
+			"    #............#      ",
+			"    #..?????????.#      ",
+			"    #..?........?#      ",
+			"    #..?........?#      ",
+			"    #..?........?#      ",
+			"    #..?........?#      ",
+			"    #..?????????.#      ",
+			"    #............#      ",
+			"     #..........#       ",
+			"      ##########        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        ",
+			"                        "]
 
 # 16x16 像素图案（ASCII 调色板手绘）
 func _pattern(key: String) -> Array:
@@ -381,6 +600,177 @@ func _pattern(key: String) -> Array:
 			"  AAAAAaAAAA    ",
 			"  AAAAAAAAAA    ",
 			"                ",
+			"                ",
+			"                ",
+			"                "]
+		# NPC 图案（服装颜色区分）
+		"npc_villager": return [
+			"                ",
+			"     hhhhh      ",
+			"    hhHHHhh     ",
+			"    hHHHHHh     ",
+			"    sssSsss     ",
+			"    s s s s     ",
+			"   #bbbbbbb#    ",
+			"  #bBBBBBBBb#   ",
+			"  #bBBBBBBBb#   ",
+			"  #bBBBbBBBb#   ",
+			"   #bbbbbbb#    ",
+			"    pppppp      ",
+			"    pPppPp      ",
+			"    pPppPp      ",
+			"    PP  PP      ",
+			"    SS  SS      "]
+		"npc_villager2": return [
+			"     hhhhh      ",
+			"    hhHHHhh     ",
+			"    hHHHHHh     ",
+			"    sssSsss     ",
+			"    s s s s     ",
+			"   #bbbbbbb#    ",
+			"  #bBBBBBBBb#   ",
+			"  #bBBBBBBBb#   ",
+			"  #bBBBbBBBb#   ",
+			"   #bbbbbbb#    ",
+			"    pppppp      ",
+			"   pPppPp       ",
+			"    PP  P       ",
+			"   SS   S       ",
+			"   ##   ##      ",
+			"                "]
+		"npc_merchant": return [
+			"                ",
+			"     hhhhh      ",
+			"    hhHHHhh     ",
+			"    hHHHHHh     ",
+			"    sssSsss     ",
+			"    s s s s     ",
+			"   #mmmmmmm#    ",
+			"  #mMMMMMMMm#   ",
+			"  #mMMMMMMMm#   ",
+			"  #mMMMmMMMm#   ",
+			"   #mmmmmmm#    ",
+			"    pppppp      ",
+			"    pPppPp      ",
+			"    pPppPp      ",
+			"    PP  PP      ",
+			"    SS  SS      "]
+		"npc_merchant2": return [
+			"     hhhhh      ",
+			"    hhHHHhh     ",
+			"    hHHHHHh     ",
+			"    sssSsss     ",
+			"    s s s s     ",
+			"   #mmmmmmm#    ",
+			"  #mMMMMMMMm#   ",
+			"  #mMMMMMMMm#   ",
+			"  #mMMMmMMMm#   ",
+			"   #mmmmmmm#    ",
+			"    pppppp      ",
+			"   pPppPp       ",
+			"    PP  P       ",
+			"   SS   S       ",
+			"   ##   ##      ",
+			"                "]
+		"npc_hunter": return [
+			"                ",
+			"     HHHHH      ",
+			"    HHhhhHH     ",
+			"    HhhhhhH     ",
+			"    sssSsss     ",
+			"    s s s s     ",
+			"   #ggggggg#    ",
+			"  #gGGGGGGGg#   ",
+			"  #gGGGGGGGg#   ",
+			"  #gGGGgGGGg#   ",
+			"   #ggggggg#    ",
+			"    pppppp      ",
+			"    pPppPp      ",
+			"    pPppPp      ",
+			"    PP  PP      ",
+			"    SS  SS      "]
+		"npc_hunter2": return [
+			"     HHHHH      ",
+			"    HHhhhHH     ",
+			"    HhhhhhH     ",
+			"    sssSsss     ",
+			"    s s s s     ",
+			"   #ggggggg#    ",
+			"  #gGGGGGGGg#   ",
+			"  #gGGGGGGGg#   ",
+			"  #gGGGgGGGg#   ",
+			"   #ggggggg#    ",
+			"    pppppp      ",
+			"   pPppPp       ",
+			"    PP  P       ",
+			"   SS   S       ",
+			"   ##   ##      ",
+			"                "]
+		"npc_elder": return [
+			"                ",
+			"     WWWWW      ",
+			"    WWhhhWW     ",
+			"    WhHHHWw     ",
+			"    sssSsss     ",
+			"    s s s s     ",
+			"   #MMMMMMM#    ",
+			"  #MmmmmmmmM#   ",
+			"  #MmmmmmmmM#   ",
+			"  #MmmMmMmmM#   ",
+			"   #MMMMMMM#    ",
+			"    pppppp      ",
+			"    PP  PP      ",
+			"    PP  PP      ",
+			"    SS  SS      ",
+			"    ##  ##      "]
+		"npc_elder2": return [
+			"     WWWWW      ",
+			"    WWhhhWW     ",
+			"    WhHHHWw     ",
+			"    sssSsss     ",
+			"    s s s s     ",
+			"   #MMMMMMM#    ",
+			"  #MmmmmmmmM#   ",
+			"  #MmmmmmmmM#   ",
+			"  #MmmMmMmmM#   ",
+			"   #MMMMMMM#    ",
+			"    pppppp      ",
+			"   PP  PP       ",
+			"   SS  SS       ",
+			"   ##  ##       ",
+			"                ",
+			"                "]
+		"npc_child": return [
+			"                ",
+			"                ",
+			"     hhhhh      ",
+			"    hhHHHhh     ",
+			"    sssSsss     ",
+			"    s s s s     ",
+			"   #rrrrrrr#    ",
+			"  #rRRRRRRRr#   ",
+			"  #rRRRrRRRr#   ",
+			"   #rrrrrrr#    ",
+			"    pppppp      ",
+			"    pPppPp      ",
+			"    PP  PP      ",
+			"                ",
+			"                ",
+			"                "]
+		"npc_child2": return [
+			"                ",
+			"     hhhhh      ",
+			"    hhHHHhh     ",
+			"    sssSsss     ",
+			"    s s s s     ",
+			"   #rrrrrrr#    ",
+			"  #rRRRRRRRr#   ",
+			"  #rRRRrRRRr#   ",
+			"   #rrrrrrr#    ",
+			"    pppppp      ",
+			"   pPppPp       ",
+			"   PP  P        ",
+			"   S    S       ",
 			"                ",
 			"                ",
 			"                "]
