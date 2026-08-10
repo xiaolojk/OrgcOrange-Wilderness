@@ -1,0 +1,23 @@
+# .gitignore — Godot 项目
+# Godot 生成目录
+.godot/
+.godot_editor/
+*.import
+
+# 构建产物
+build/
+*.apk
+*.aab
+*.keystore
+
+# IDE / 系统
+.vs/
+.vscode/
+.idea/
+*.csproj
+*.sln
+.DS_Store
+Thumbs.db
+
+# 不要忽略 .godot 下的必要文件时取消注释
+# !.godot/editor/

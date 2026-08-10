@@ -1,0 +1,100 @@
+name: 编译 Android APK
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Godot 导出 Android
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 缓存 Godot 模板
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.local/share/godot/export_templates
+            /tmp/godot
+          key: godot-4.3-stable-android
+
+      - name: 安装 Godot + 导出模板 + Android SDK
+        run: |
+          set -e
+          GODOT_VERSION="4.3-stable"
+          mkdir -p /tmp/godot
+          # 下载 Godot headless
+          if [ ! -f /tmp/godot/godot ]; then
+            wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip" -O /tmp/godot/godot.zip
+            unzip -o /tmp/godot/godot.zip -d /tmp/godot
+            mv /tmp/godot/Godot_v${GODOT_VERSION}_linux.x86_64 /tmp/godot/godot
+            chmod +x /tmp/godot/godot
+          fi
+          # 下载导出模板
+          TPL_DIR="$HOME/.local/share/godot/export_templates/4.3.stable"
+          mkdir -p "$TPL_DIR"
+          if [ ! -f "$TPL_DIR/android_debug.apk" ]; then
+            wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_export_templates.tpz" -O /tmp/godot/tpl.tpz
+            unzip -o /tmp/godot/tpl.tpz -d /tmp/godot/tpl
+            cp /tmp/godot/tpl/templates/android_debug.apk "$TPL_DIR/"
+            cp /tmp/godot/tpl/templates/android_release.apk "$TPL_DIR/"
+          fi
+          /tmp/godot/godot --version
+
+      - name: 安装 Android SDK / JDK（gradle 构建）
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-34 build-tools;34.0.0 cmdline-tools;latest'
+
+      - name: 设置 Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: 导出 APK
+        run: |
+          set -e
+          mkdir -p build
+          export ANDROID_HOME=$ANDROID_SDK_ROOT
+          /tmp/godot/godot --headless --export-release "Android" build/OrangeWilderness.apk
+          ls -lh build/
+
+      - name: 上传 APK 构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: OrangeWilderness-APK
+          path: build/OrangeWilderness.apk
+          if-no-files-found: error
+
+  release:
+    name: 发布到 GitHub Releases
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 下载 APK 产物
+        uses: actions/download-artifact@v4
+        with:
+          name: OrangeWilderness-APK
+          path: release
+
+      - name: 创建 Release 并上传 APK
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" release/OrangeWilderness.apk \
+            --title "《橘子荒野》$TAG" \
+            --notes "Orgc橘子工作室 出品 · 像素风荒野生存开放世界
+
+          Android 10+ 通用（arm64/armv7，适配 vivo 全系）。
+
+          安装：下载 OrangeWilderness.apk，在手机上允许\"未知来源\"后安装。" \
+            --verify-tag
