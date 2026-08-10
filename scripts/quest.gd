@@ -1,5 +1,6 @@
 # quest.gd — 主线「灰雾与橘子」五章
 # Orgc橘子工作室 · 《橘子荒野》
+class_name QuestSystem
 extends Node
 
 const CHAPTERS := ["ch1", "ch2", "ch3", "ch4", "ch5"]

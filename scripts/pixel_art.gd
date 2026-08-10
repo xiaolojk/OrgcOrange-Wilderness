@@ -1,6 +1,7 @@
 # pixel_art.gd — 程序化像素画图集（星露谷物语风格化调色）
 # 运行时用 Image 生成 16x16 像素精灵，点采样、像素完美。无需美术文件。
 # Orgc橘子工作室 · 《橘子荒野》
+class_name PixelArt
 extends Node
 
 const PX := 16
@@ -28,9 +29,9 @@ func _build(key: String) -> Texture2D:
 func _build_tile(name: String) -> Image:
 	var img := Image.create(PX, PX, false, Image.FORMAT_RGBA8)
 	# 星露谷式柔和饱和调色：基色 / 描边
-	var cfg := _tile_colors(name)
-	var base := cfg[0]
-	var edge := cfg[1]
+	var cfg: Array = _tile_colors(name)
+	var base: Color = cfg[0]
+	var edge: Color = cfg[1]
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(name)
 	for y in range(PX):
@@ -80,9 +81,9 @@ const PAL := {
 }
 
 func _build_figure(key: String) -> Image:
-	var rows := _pattern(key)
-	var h := rows.size()
-	var w := rows[0].length()
+	var rows: Array = _pattern(key)
+	var h: int = rows.size()
+	var w: int = rows[0].length()
 	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
 	for y in range(h):
 		var row: String = rows[y]

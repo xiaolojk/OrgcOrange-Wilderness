@@ -1,5 +1,6 @@
 # forge_panel.gd — 锻造面板：把材料放上铁砧 → 点击锻造
 # 触屏友好。Orgc橘子工作室 · 《橘子荒野》
+class_name ForgePanel
 extends CanvasLayer
 
 var _forge: Node2D = null
@@ -118,13 +119,13 @@ func _refresh() -> void:
 	for id in p.inventory.keys():
 		if Items.category(id) == Items.Category.EQUIPMENT:
 			continue
-		var n := p.count_item(id)
+		var n: int = p.count_item(id)
 		if n <= 0: continue
 		_add_item_button(_inv_grid, id, n, func(): _forge.place_on_anvil(id, 1); _refresh())
 	# 铁砧
 	if _forge != null:
 		for id in _forge.anvil.keys():
-			var n := _forge.anvil[id]
+			var n: int = _forge.anvil[id]
 			if n <= 0: continue
 			_add_item_button(_anvil_grid, id, n, null)
 

@@ -1,5 +1,6 @@
 # touch_controls.gd — 触屏控制：左半屏动态摇杆 + 右下行动按钮
 # 直接读取 Input 缩放/触摸事件，低延迟灵敏。Orgc橘子工作室
+class_name TouchControls
 extends CanvasLayer
 
 var _player: CharacterBody2D

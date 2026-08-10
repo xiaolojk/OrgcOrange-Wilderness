@@ -1,5 +1,6 @@
 # player.gd — 玩家：触屏摇杆 + 键盘移动 + 交互
 # Orgc橘子工作室 · 《橘子荒野》
+class_name Player
 extends CharacterBody2D
 
 const MOVE_SPEED := 180.0

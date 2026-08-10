@@ -1,5 +1,6 @@
 # world.gd — 世界系统：程序化地形 TileMap + 昼夜 + 天气
 # Orgc橘子工作室 · 《橘子荒野》
+class_name WorldSystem
 extends Node2D
 
 const WORLD_SIZE := 80
@@ -38,8 +39,8 @@ func temperature() -> float:
 
 # 环境色（驱动背景/氛围）
 func ambient_color() -> Color:
-	var d := abs((time_of_day - 0.5) * 2.0)  # 0=正午 1=午夜
-	var light := lerpf(1.0, 0.35, d)
+	var d: float = abs((time_of_day - 0.5) * 2.0)  # 0=正午 1=午夜
+	var light: float = lerpf(1.0, 0.35, d)
 	if weather == "雨": light *= 0.85
 	if weather == "雾": light *= 0.92
 	return Color(light, light * 0.96, light * 1.02, 1.0)
@@ -59,17 +60,18 @@ func _build_tileset() -> void:
 		"stone":  [Color(0.51,0.51,0.54), Color(0.31,0.31,0.35)],
 		"snow":   [Color(0.91,0.94,0.97), Color(0.75,0.78,0.84)],
 	}
-	var idx := 0
-	for name in tiles:
-		var img := _make_tile_image(tiles[name][0], tiles[name][1], name)
+	for tname in tiles:
+		var img := _make_tile_image(tiles[tname][0], tiles[tname][1], tname)
 		var tex := ImageTexture.new()
 		tex.create_from_image(img)
 		var src := TileSetAtlasSource.new()
 		src.texture = tex
-		src.create_tile(Vector2i(0,0))
+		src.texture_region_size = Vector2i(16, 16)
+		# Godot 4: create_tile 若已存在会报错，用 has_tile 守卫
+		if not src.has_tile(Vector2i(0,0)):
+			src.create_tile(Vector2i(0,0))
 		var sid := _tile_set.add_source(src)
-		_tile_ids[name] = sid
-		idx += 1
+		_tile_ids[tname] = sid
 
 func _make_tile_image(base: Color, edge: Color, name: String) -> Image:
 	var img := Image.create(16, 16, false, Image.FORMAT_RGBA8)
@@ -115,17 +117,17 @@ func _choose_tile(h: float) -> String:
 # Simplex 风格噪声（GDScript 实现，确定性）
 func _noise2d(x: float, y: float) -> float:
 	# 简化的梯度噪声：用 sin/cos 哈希
-	var xi := int(floor(x)) & 255
-	var yi := int(floor(y)) & 255
-	var xf := x - floor(x)
-	var yf := y - floor(y)
-	var u := xf * xf * xf * (xf * (xf * 6.0 - 15.0) + 10.0)
-	var v := yf * yf * yf * (yf * (yf * 6.0 - 15.0) + 10.0)
-	var a := _grad(_hash(xi, yi), xf, yf)
-	var b := _grad(_hash(xi+1, yi), xf-1, yf)
-	var c := _grad(_hash(xi, yi+1), xf, yf-1)
-	var d := _grad(_hash(xi+1, yi+1), xf-1, yf-1)
-	var n := lerp(lerp(a, b, u), lerp(c, d, u), v)
+	var xi: int = int(floor(x)) & 255
+	var yi: int = int(floor(y)) & 255
+	var xf: float = x - floor(x)
+	var yf: float = y - floor(y)
+	var u: float = xf * xf * xf * (xf * (xf * 6.0 - 15.0) + 10.0)
+	var v: float = yf * yf * yf * (yf * (yf * 6.0 - 15.0) + 10.0)
+	var a: float = _grad(_hash(xi, yi), xf, yf)
+	var b: float = _grad(_hash(xi+1, yi), xf-1, yf)
+	var c: float = _grad(_hash(xi, yi+1), xf, yf-1)
+	var d: float = _grad(_hash(xi+1, yi+1), xf-1, yf-1)
+	var n: float = lerpf(lerpf(a, b, u), lerpf(c, d, u), v)
 	return 0.5 + 0.5 * n
 
 func _hash(x: int, y: int) -> int:
@@ -133,9 +135,9 @@ func _hash(x: int, y: int) -> int:
 	return h
 
 func _grad(hash_val: int, x: float, y: float) -> float:
-	var h := hash_val & 7
-	var u := x if h < 4 else y
-	var v := y if h < 4 else x
+	var h: int = hash_val & 7
+	var u: float = x if h < 4 else y
+	var v: float = y if h < 4 else x
 	return ((-u) if (h & 1) else u) + ((-2.0*v) if (h & 2) else (2.0*v))
 
 func _fbm(x: float, y: float, octaves: int) -> float:

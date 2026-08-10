@@ -1,5 +1,6 @@
 # ui.gd — HUD：属性条 + 任务 + 提示 + 品牌 + 时钟（全中文）
 # Orgc橘子工作室 · 《橘子荒野》
+class_name HUD
 extends CanvasLayer
 
 var _hunger_fill: ProgressBar

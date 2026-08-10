@@ -52,7 +52,7 @@ func anvil_count(id: String) -> int:
 	return anvil.get(id, 0)
 
 func try_forge() -> String:
-	var recipe := _match_recipe()
+	var recipe: Variant = _match_recipe()
 	if recipe == null:
 		G.toast("铁砧上的材料不匹配任何锻造配方")
 		return ""

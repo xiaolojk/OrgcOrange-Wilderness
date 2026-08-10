@@ -14,53 +14,85 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      - name: 缓存 Godot 模板
+      - name: 安装 Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: 安装 Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-34 build-tools;34.0.0'
+
+      - name: 缓存 Godot
         uses: actions/cache@v4
         with:
           path: |
-            ~/.local/share/godot/export_templates
             /tmp/godot
-          key: godot-4.3-stable-android
+            ~/.local/share/godot/export_templates
+          key: godot-4.3-stable-android-v2
 
-      - name: 安装 Godot + 导出模板 + Android SDK
+      - name: 安装 Godot + 导出模板
         run: |
           set -e
           GODOT_VERSION="4.3-stable"
           mkdir -p /tmp/godot
-          # 下载 Godot headless
           if [ ! -f /tmp/godot/godot ]; then
             wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip" -O /tmp/godot/godot.zip
             unzip -o /tmp/godot/godot.zip -d /tmp/godot
             mv /tmp/godot/Godot_v${GODOT_VERSION}_linux.x86_64 /tmp/godot/godot
             chmod +x /tmp/godot/godot
           fi
-          # 下载导出模板
           TPL_DIR="$HOME/.local/share/godot/export_templates/4.3.stable"
           mkdir -p "$TPL_DIR"
-          if [ ! -f "$TPL_DIR/android_debug.apk" ]; then
+          if [ ! -f "$TPL_DIR/android_release.apk" ]; then
             wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_export_templates.tpz" -O /tmp/godot/tpl.tpz
             unzip -o /tmp/godot/tpl.tpz -d /tmp/godot/tpl
             cp /tmp/godot/tpl/templates/android_debug.apk "$TPL_DIR/"
             cp /tmp/godot/tpl/templates/android_release.apk "$TPL_DIR/"
           fi
           /tmp/godot/godot --version
+          echo "JAVA_HOME=$JAVA_HOME"
+          echo "ANDROID_HOME=$ANDROID_HOME"
 
-      - name: 安装 Android SDK / JDK（gradle 构建）
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'platforms;android-34 build-tools;34.0.0 cmdline-tools;latest'
+      - name: 生成 debug keystore
+        run: |
+          mkdir -p ~/.local/share/godot/keystores
+          if [ ! -f ~/.local/share/godot/keystores/debug.keystore ]; then
+            keytool -genkeypair -keystore ~/.local/share/godot/keystores/debug.keystore \
+              -storepass android -alias androiddebugkey -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=OrgcOrange, OU=Orgc, O=Orgc橘子工作室, L=CN, ST=CN, C=CN"
+          fi
+          ls -lh ~/.local/share/godot/keystores/debug.keystore
 
-      - name: 设置 Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
+      - name: 配置 Godot editor settings
+        run: |
+          mkdir -p ~/.config/godot
+          # 先让 Godot 生成默认 settings
+          /tmp/godot/godot --headless --editor --quit >/dev/null 2>&1 || true
+          SETTINGS=~/.config/godot/editor_settings-4.3.tres
+          if [ ! -f "$SETTINGS" ]; then
+            SETTINGS=~/.config/godot/editor_settings-4.tres
+          fi
+          echo "=== 修改前 ==="
+          grep -E "android_sdk_path|java_sdk_path|debug_keystore " "$SETTINGS" || true
+          # 替换 SDK / JDK / keystore 路径
+          sed -i "s|export/android/android_sdk_path = .*|export/android/android_sdk_path = \"$ANDROID_HOME\"|" "$SETTINGS"
+          sed -i "s|export/android/java_sdk_path = .*|export/android/java_sdk_path = \"$JAVA_HOME\"|" "$SETTINGS"
+          sed -i "s|export/android/debug_keystore = .*|export/android/debug_keystore = \"$HOME/.local/share/godot/keystores/debug.keystore\"|" "$SETTINGS"
+          echo "=== 修改后 ==="
+          grep -E "android_sdk_path|java_sdk_path|debug_keystore " "$SETTINGS"
+
+      - name: 导入项目资源（生成 ETC2/ASTC 纹理）
+        run: |
+          /tmp/godot/godot --headless --editor --quit 2>&1 | tail -3 || true
 
       - name: 导出 APK
         run: |
           set -e
           mkdir -p build
-          export ANDROID_HOME=$ANDROID_SDK_ROOT
           /tmp/godot/godot --headless --export-release "Android" build/OrangeWilderness.apk
           ls -lh build/
 

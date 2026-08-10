@@ -1,12 +1,11 @@
-# items.gd — 物品目录（数据驱动）
+# items.gd — 物品目录（数据驱动，Autoload 单例）
 # Orgc橘子工作室 · 《橘子荒野》
-class_name Items
-extends RefCounted
+extends Node
 
 # 物品类别
 enum Category { RESOURCE, FOOD, DRINK, TOOL, FORGE_INPUT, EQUIPMENT }
 
-# 物品定义：id -> {name, category, sprite_key, max_stack}
+# 物品定义：id -> {name, category, sprite_key}
 const DEFS := {
 	"wood":         {"name": "木头",   "cat": Category.RESOURCE,   "key": "wood"},
 	"stone":        {"name": "石头",   "cat": Category.RESOURCE,   "key": "stone"},
@@ -21,17 +20,17 @@ const DEFS := {
 	"purify_amulet":{"name": "净雾护符","cat": Category.EQUIPMENT, "key": "purify_amulet"},
 }
 
-static func display_name(item_id: String) -> String:
+func display_name(item_id: String) -> String:
 	if DEFS.has(item_id):
 		return DEFS[item_id].name
 	return item_id
 
-static func sprite_key(item_id: String) -> String:
+func sprite_key(item_id: String) -> String:
 	if DEFS.has(item_id):
 		return DEFS[item_id].key
 	return item_id
 
-static func category(item_id: String) -> int:
+func category(item_id: String) -> int:
 	if DEFS.has(item_id):
 		return DEFS[item_id].cat
 	return Category.RESOURCE

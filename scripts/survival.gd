@@ -1,5 +1,6 @@
 # survival.gd — 生存系统：饥/渴/体力/生命/体温
 # Orgc橘子工作室 · 《橘子荒野》
+class_name SurvivalSystem
 extends Node
 
 class Stats:
@@ -28,11 +29,11 @@ var _tick := 0.0
 signal stats_changed(hunger, thirst, stamina, health, temperature)
 signal player_died
 
-func tick(world, dt: float, moving: bool) -> void:
+func tick(world: Node2D, dt: float, moving: bool) -> void:
 	stats.hunger -= HUNGER_DECAY * dt
 	stats.thirst -= THIRST_DECAY * dt
 	stats.stamina += ((-STAMINA_DECAY) if moving else (STAMINA_DECAY * 0.8)) * dt
-	var env := world.temperature()
+	var env: float = world.temperature()
 	stats.temperature = move_toward(stats.temperature, env, 0.5 * dt)
 	
 	var critical := stats.hunger <= 0.0 or stats.thirst <= 0.0

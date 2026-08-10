@@ -2,27 +2,35 @@
 # Orgc橘子工作室 · 《橘子荒野》
 extends Node2D
 
+const PixelArtScript    = preload("res://scripts/pixel_art.gd")
+const WorldScript       = preload("res://scripts/world.gd")
+const PlayerScript      = preload("res://scripts/player.gd")
+const SurvivalScript    = preload("res://scripts/survival.gd")
+const ForgeScript       = preload("res://scripts/forge.gd")
+const QuestScript       = preload("res://scripts/quest.gd")
+const UIScript          = preload("res://scripts/ui.gd")
+const TouchScript       = preload("res://scripts/touch_controls.gd")
+const ForgePanelScript  = preload("res://scripts/forge_panel.gd")
+const ResourceNodeScript= preload("res://scripts/resource_node.gd")
+
 var _camera: Camera2D
 
 func _ready() -> void:
 	Engine.max_fps = 60
-	# 像素艺术设置
-	get_viewport().position_smoothing_enabled = false
 
 	# 1. 像素图集（全局）
-	G.pix = preload("res://scripts/pixel_art.gd").new()
+	G.pix = PixelArtScript.new()
 	G.pix.name = "PixelArt"
 	add_child(G.pix)
 
 	# 2. 世界
-	var world := preload("res://scripts/world.gd").new()
+	var world: Node2D = WorldScript.new()
 	world.name = "World"
 	add_child(world)
 	G.world = world
 
 	# 3. 玩家
-	var PlayerScript := preload("res://scripts/player.gd")
-	var player := PlayerScript.new()
+	var player: CharacterBody2D = PlayerScript.new()
 	player.name = "Player"
 	player.position = Vector2.ZERO
 	add_child(player)
@@ -36,8 +44,7 @@ func _ready() -> void:
 	player.add_child(_camera)
 
 	# 5. 生存系统
-	var SurvivalScript := preload("res://scripts/survival.gd")
-	var survival := SurvivalScript.new()
+	var survival: Node = SurvivalScript.new()
 	survival.name = "Survival"
 	add_child(survival)
 	G.survival = survival
@@ -46,37 +53,32 @@ func _ready() -> void:
 	_spawn_resources(world, player.position)
 
 	# 7. 锻造铁砧
-	var ForgeScript := preload("res://scripts/forge.gd")
-	var anvil := ForgeScript.new()
+	var anvil: Node2D = ForgeScript.new()
 	anvil.name = "Anvil"
 	anvil.position = Vector2(80, -32)
 	add_child(anvil)
 	G.forge = anvil
 
 	# 8. 任务系统
-	var QuestScript := preload("res://scripts/quest.gd")
-	var quest := QuestScript.new()
+	var quest: Node = QuestScript.new()
 	quest.name = "Quest"
 	add_child(quest)
 	G.quest = quest
 
 	# 9. UI 层
-	var UIScript := preload("res://scripts/ui.gd")
-	var ui := UIScript.new()
+	var ui: CanvasLayer = UIScript.new()
 	ui.name = "HUD"
 	add_child(ui)
 	G.ui = ui
 
 	# 触屏控制
-	var TouchScript := preload("res://scripts/touch_controls.gd")
-	var touch := TouchScript.new()
+	var touch: CanvasLayer = TouchScript.new()
 	touch.name = "TouchControls"
 	add_child(touch)
 	touch.init(player)
 
 	# 锻造面板
-	var PanelScript := preload("res://scripts/forge_panel.gd")
-	var panel := PanelScript.new()
+	var panel: CanvasLayer = ForgePanelScript.new()
 	panel.name = "ForgePanel"
 	add_child(panel)
 	# 铁砧打开时打开面板
@@ -92,14 +94,13 @@ func _ready() -> void:
 
 	print("[Orgc] 橘子荒野 启动完成 — Orgc橘子工作室")
 
-func _spawn_resources(world, center: Vector2) -> void:
-	var ResourceScript := preload("res://scripts/resource_node.gd")
+func _spawn_resources(world: Node2D, center: Vector2) -> void:
 	var cfg := [
-		[ResourceScript.Kind.TREE, 14],
-		[ResourceScript.Kind.BUSH, 8],
-		[ResourceScript.Kind.ROCK, 7],
-		[ResourceScript.Kind.IRON_ORE, 5],
-		[ResourceScript.Kind.WATER, 3],
+		[ResourceNodeScript.Kind.TREE, 14],
+		[ResourceNodeScript.Kind.BUSH, 8],
+		[ResourceNodeScript.Kind.ROCK, 7],
+		[ResourceNodeScript.Kind.IRON_ORE, 5],
+		[ResourceNodeScript.Kind.WATER, 3],
 	]
 	for entry in cfg:
 		var kind = entry[0]
@@ -107,19 +108,19 @@ func _spawn_resources(world, center: Vector2) -> void:
 		for i in range(count):
 			var pos := _find_valid_pos(world, center)
 			if pos == Vector2.ZERO: continue
-			var node := ResourceScript.new()
+			var node: Area2D = ResourceNodeScript.new()
 			node.kind = kind
 			node.position = pos
 			node.name = "Res_%d_%d" % [kind, i]
 			add_child(node)
 
-func _find_valid_pos(world, center: Vector2) -> Vector2:
+func _find_valid_pos(world: Node2D, center: Vector2) -> Vector2:
 	for _i in range(30):
 		var r := randf_range(40.0, 240.0)
 		var a := randf() * TAU
 		var p := center + Vector2(cos(a), sin(a)) * r
-		var cell := world.world_to_cell(p)
-		var t := world.tile_type_at(cell)
+		var cell: Vector2i = world.world_to_cell(p)
+		var t: String = world.tile_type_at(cell)
 		if t == "grass" or t == "dirt" or t == "sand":
 			if p.distance_to(center) > 25.0:
 				return p
