@@ -24,13 +24,13 @@ func _ready() -> void:
 	sprite.texture = G.pix.get_sprite("player")
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	sprite.centered = true
-	sprite.scale = Vector2(3, 3)  # 放大玩家
+	sprite.scale = Vector2(1.5, 1.5)  # HQ 图 64x64，轻量放大
 	add_child(sprite)
 	sprite_walk = Sprite2D.new()
 	sprite_walk.texture = G.pix.get_sprite("player_walk")
 	sprite_walk.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	sprite_walk.centered = true
-	sprite_walk.scale = Vector2(3, 3)
+	sprite_walk.scale = Vector2(1.5, 1.5)
 	sprite_walk.visible = false
 	add_child(sprite_walk)
 	# 碰撞

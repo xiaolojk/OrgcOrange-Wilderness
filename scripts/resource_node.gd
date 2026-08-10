@@ -20,8 +20,8 @@ func _ready() -> void:
 	_sprite.texture = G.pix.get_sprite(_sprite_key())
 	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_sprite.centered = true
-	# 放大 3 倍，让物品更醒目（主角看时不会像毛毛雨）
-	_sprite.scale = Vector2(3, 3)
+	# HQ 图 64x64，轻量放大保持像素感
+	_sprite.scale = Vector2(1.5, 1.5)
 	add_child(_sprite)
 	var col := CollisionShape2D.new()
 	var rect := RectangleShape2D.new()

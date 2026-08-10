@@ -28,26 +28,62 @@ const PAL := {
 
 func _init() -> void:
 	_ensure_dir("res://assets")
-	# 1. 生成所有精灵 PNG（16x16）
+	# === 高质量素材优先：assets/hq/*.jpg → 抠图缩小 → assets/*.png ===
+	# 如果 hq 目录下有对应 JPEG，用它生成精美 PNG；否则用程序化生成
+	# 1. 生成所有精灵 PNG
 	var sprites := ["player","player_walk","wood","stone","fiber","iron_ore","charcoal","iron_ingot",
 		"berry","meat","water","iron_blade","purify_amulet","tree","bush","rock","anvil"]
 	for key in sprites:
-		_save_sprite(key, "res://assets/%s.png" % key)
-	# 2. 生成建筑物 PNG（32x32，比普通精灵大）
+		if not _try_hq(key, "res://assets/%s.png" % key, 64):
+			_save_sprite(key, "res://assets/%s.png" % key)
+	# 2. 生成建筑物 PNG
 	var buildings := ["house","tent","campfire","well","fence"]
 	for key in buildings:
-		_save_building(key, "res://assets/%s.png" % key)
-	# 3. 生成 NPC PNG（16x16，不同颜色服装）+ 第二帧（动作）
+		if not _try_hq(key, "res://assets/%s.png" % key, 96):
+			_save_building(key, "res://assets/%s.png" % key)
+	# 3. 生成 NPC PNG + 第二帧
 	var npcs := ["npc_villager","npc_merchant","npc_hunter",
 		"npc_villager2","npc_merchant2","npc_hunter2",
 		"npc_elder","npc_elder2","npc_child","npc_child2"]
 	for key in npcs:
-		_save_sprite(key, "res://assets/%s.png" % key)
-	# 主角走路第二帧已含在上方 sprites 列表
-	# 4. 生成地图 PNG（固定种子，与 world.gd 一致）
+		# NPC 第二帧用第一帧的图（轻微变体）
+		var base_key := key.rstrip("2")
+		if not _try_hq(base_key, "res://assets/%s.png" % key, 64):
+			_save_sprite(key, "res://assets/%s.png" % key)
+	# 4. 生成地图 PNG
 	_save_map("res://assets/map.png")
 	print("[Orgc] 所有资源 PNG 已生成到 res://assets/")
 	quit()
+
+# 尝试从高质量 JPEG 生成精灵（色度键抠图 + 缩小）
+func _try_hq(key: String, out_path: String, size: int) -> bool:
+	var hq_path := "res://assets/hq/%s.jpg" % key
+	if not FileAccess.file_exists(hq_path):
+		return false
+	var img := Image.load_from_file(hq_path)
+	if img == null:
+		print("[Orgc] HQ 图片加载失败: ", hq_path)
+		return false
+	# 先缩小到 256x256 加速色度键处理
+	img.resize(256, 256, Image.INTERPOLATE_LANCZOS)
+	# 取四角颜色作为背景色
+	var bg := img.get_pixel(0, 0)
+	bg += img.get_pixel(255, 0)
+	bg += img.get_pixel(0, 255)
+	bg += img.get_pixel(255, 255)
+	bg = bg / 4.0
+	# 色度键：与背景色接近的像素设为透明
+	var threshold := 0.20
+	for y in range(256):
+		for x in range(256):
+			var c := img.get_pixel(x, y)
+			if c.distance_to(bg) < threshold:
+				img.set_pixel(x, y, Color(0, 0, 0, 0))
+	# 缩小到目标尺寸（最近邻保持像素感）
+	img.resize(size, size, Image.INTERPOLATE_NEAREST)
+	img.save_png(out_path)
+	print("[Orgc] HQ 精灵已生成 %s (%dx%d, 抠图)" % [out_path, size, size])
+	return true
 
 func _save_building(key: String, path: String) -> void:
 	var img := _build_building(key)

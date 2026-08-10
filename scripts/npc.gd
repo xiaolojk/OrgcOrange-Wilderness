@@ -53,14 +53,14 @@ func _create_npc(npc_type: String, pos: Vector2, npc_name: String, dialog: Strin
 	sprite.texture = G.pix.get_sprite(npc_type)
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	sprite.centered = true
-	sprite.scale = Vector2(3, 3)  # 体积变大
+	sprite.scale = Vector2(1.5, 1.5)  # HQ 图 64x64
 	npc.add_child(sprite)
 	# 第二帧（动作）— key 加 "2"
 	var sprite2 := Sprite2D.new()
 	sprite2.texture = G.pix.get_sprite(npc_type + "2")
 	sprite2.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	sprite2.centered = true
-	sprite2.scale = Vector2(3, 3)
+	sprite2.scale = Vector2(1.5, 1.5)
 	sprite2.visible = false
 	npc.add_child(sprite2)
 	# 名字标签（悬浮头顶）
@@ -110,6 +110,7 @@ func _build_dialog_box() -> void:
 	style.corner_radius_bottom_right = 8
 	_dialog_bg.add_theme_stylebox_override("panel", style)
 	_dialog_bg.visible = false
+	_dialog_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE  # 不挡触摸
 	_dialog_layer.add_child(_dialog_bg)
 	_dialog_label = Label.new()
 	_dialog_label.anchor_left = 0.02; _dialog_label.anchor_right = 0.98
@@ -119,6 +120,7 @@ func _build_dialog_box() -> void:
 	_dialog_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_dialog_label.add_theme_font_size_override("font", 18)
 	_dialog_label.add_theme_color_override("font_color", Color(1, 1, 0.9, 1))
+	_dialog_label.mouse_filter = Control.MOUSE_FILTER_IGNORE  # 不挡触摸
 	_dialog_bg.add_child(_dialog_label)
 
 func _process(dt: float) -> void:
