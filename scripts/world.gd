@@ -69,59 +69,14 @@ func _choose_tile(h: float) -> String:
 	if h < 0.88: return "stone"
 	return "snow"
 
-# ============ 预渲染整张地图到单个 Image，用 Sprite2D 显示 ============
+# ============ 加载预生成的地图 PNG（CI 时由 generate_assets.gd 生成） ============
 func _build_map_sprite() -> void:
-	# tile 颜色配置
-	var tile_colors := {
-		"water":  [Color(0.27,0.51,0.82), Color(0.16,0.35,0.63)],
-		"sand":   [Color(0.87,0.80,0.55), Color(0.71,0.63,0.39)],
-		"grass":  [Color(0.42,0.67,0.25), Color(0.24,0.43,0.16)],
-		"grass2": [Color(0.48,0.74,0.31), Color(0.27,0.47,0.19)],
-		"dirt":   [Color(0.56,0.39,0.25), Color(0.35,0.25,0.16)],
-		"stone":  [Color(0.51,0.51,0.54), Color(0.31,0.31,0.35)],
-		"snow":   [Color(0.91,0.94,0.97), Color(0.75,0.78,0.84)],
-	}
-	# 为每种 tile 预生成 16x16 像素图
-	var tile_images: Dictionary = {}
-	for tname in tile_colors:
-		tile_images[tname] = _make_tile_image(tile_colors[tname][0], tile_colors[tname][1], tname)
-
-	# 拼接成大图
-	var map_size := WORLD_SIZE * TILE_PX
-	var map_img := Image.create(map_size, map_size, false, Image.FORMAT_RGBA8)
-	var half := WORLD_SIZE / 2
-	for y in range(WORLD_SIZE):
-		for x in range(WORLD_SIZE):
-			var tname: String = _grid[y][x]
-			var tile_img: Image = tile_images.get(tname)
-			if tile_img == null:
-				continue
-			var dst_x := (x - half) * TILE_PX + map_size / 2
-			var dst_y := (y - half) * TILE_PX + map_size / 2
-			map_img.blit_rect(tile_img, Rect2i(0, 0, TILE_PX, TILE_PX), Vector2i(dst_x, dst_y))
-	print("[Orgc] 地图 Image 创建完成，尺寸=%dx%d 格式=%d" % [map_img.get_width(), map_img.get_height(), map_img.get_format()])
-
-	# 创建纹理 + Sprite2D
-	# 方案：保存为 PNG 再用 load_resource 加载，确保纹理在所有平台有效
-	var tex: Texture2D
-	var png_path := "user://map_cache.png"
-	map_img.save_png(png_path)
-	print("[Orgc] 地图已保存到 %s" % png_path)
-	# 用 ImageTexture.create_from_image 创建（Android 上有 GPU 上下文，应有效）
-	var img_tex := ImageTexture.new()
-	img_tex.create_from_image(map_img)
-	if img_tex.get_width() > 0 and img_tex.get_height() > 0:
-		tex = img_tex
-		print("[Orgc] ImageTexture 创建成功，尺寸=%dx%d" % [tex.get_width(), tex.get_height()])
-	else:
-		# 回退：重新从 PNG 加载 Image 再创建纹理
-		print("[Orgc] ImageTexture.create_from_image 返回 0x0，回退到从 PNG 重新加载")
-		var reloaded := Image.new()
-		reloaded.load(png_path)
-		img_tex = ImageTexture.new()
-		img_tex.create_from_image(reloaded)
-		tex = img_tex
-		print("[Orgc] 从 PNG 重新加载后纹理尺寸=%dx%d" % [tex.get_width(), tex.get_height()])
+	# 用 load() 加载编辑器导入的纹理（最可靠，所有平台有效）
+	var tex: Texture2D = load("res://assets/map.png")
+	if tex == null:
+		push_error("[Orgc] 无法加载 res://assets/map.png！")
+		print("[Orgc] !!! 错误：无法加载地图纹理 !!!")
+		return
 	_map_sprite = Sprite2D.new()
 	_map_sprite.texture = tex
 	_map_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST

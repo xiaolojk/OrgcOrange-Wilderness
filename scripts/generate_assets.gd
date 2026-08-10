@@ -1,62 +1,12 @@
-# pixel_art.gd — 像素画图集（星露谷物语风格化调色）
-# CI 时预生成 PNG 到 res://assets/，运行时用 load() 加载
-# （ImageTexture.create_from_image 在 Android 上不可靠，改用编辑器导入的纹理）
+# generate_assets.gd — 预生成所有精灵 + 地图 PNG 到 res://assets/
+# CI 中运行：godot --headless --script res://scripts/generate_assets.gd
+# 编辑器随后导入这些 PNG，运行时用 load() 加载（最可靠，兼容所有设备）
 # Orgc橘子工作室 · 《橘子荒野》
-class_name PixelArt
-extends Node
+extends SceneTree
 
 const PX := 16
-var _cache := {}
 
-# 取精灵（缓存）
-func get_sprite(key: String) -> Texture2D:
-	if _cache.has(key):
-		return _cache[key]
-	var tex: Texture2D = load("res://assets/%s.png" % key)
-	if tex == null:
-		push_error("[Orgc] 无法加载精灵: res://assets/%s.png" % key)
-		print("[Orgc] !!! 错误：无法加载精灵 %s !!!" % key)
-		return null
-	_cache[key] = tex
-	print("[Orgc] 已加载精灵 %s 尺寸=%dx%d" % [key, tex.get_width(), tex.get_height()])
-	return tex
-
-# ============ 瓦片（程序化噪点 + 描边） ============
-func _build_tile(name: String) -> Image:
-	var img := Image.create(PX, PX, false, Image.FORMAT_RGBA8)
-	# 星露谷式柔和饱和调色：基色 / 描边
-	var cfg: Array = _tile_colors(name)
-	var base: Color = cfg[0]
-	var edge: Color = cfg[1]
-	var rng := RandomNumberGenerator.new()
-	rng.seed = hash(name)
-	for y in range(PX):
-		for x in range(PX):
-			var c: Color
-			var n := rng.randi_range(-12, 12)
-			var is_edge := x == 0 or y == 0 or x == PX-1 or y == PX-1
-			if is_edge:
-				c = edge
-			else:
-				c = Color(clamp(base.r*255+n,0,255)/255.0,
-						  clamp(base.g*255+n,0,255)/255.0,
-						  clamp(base.b*255+n,0,255)/255.0, 1.0)
-			img.set_pixel(x, y, c)
-	return img
-
-func _tile_colors(name: String) -> Array:
-	match name:
-		"grass":  return [Color(0.42,0.67,0.25), Color(0.24,0.43,0.16)]
-		"grass2": return [Color(0.48,0.74,0.31), Color(0.27,0.47,0.19)]
-		"dirt":   return [Color(0.56,0.39,0.25), Color(0.35,0.25,0.16)]
-		"sand":   return [Color(0.87,0.80,0.55), Color(0.71,0.63,0.39)]
-		"stone":  return [Color(0.51,0.51,0.54), Color(0.31,0.31,0.35)]
-		"water":  return [Color(0.27,0.51,0.82), Color(0.16,0.35,0.63)]
-		"snow":   return [Color(0.91,0.94,0.97), Color(0.75,0.78,0.84)]
-		"ash":    return [Color(0.38,0.34,0.38), Color(0.24,0.22,0.25)]
-		_:        return [Color(0.63,0.63,0.63), Color(0.39,0.39,0.39)]
-
-# ============ 角色/物品（ASCII 调色板手绘） ============
+# 调色板（与 pixel_art.gd 完全一致）
 const PAL := {
 	" ": Color(0,0,0,0),
 	"#": Color(0.10,0.10,0.12,1),
@@ -76,6 +26,28 @@ const PAL := {
 	"u": Color(0.86,0.56,0.50,1), "U": Color(0.66,0.36,0.32,1),
 }
 
+func _init() -> void:
+	_ensure_dir("res://assets")
+	# 1. 生成所有精灵 PNG
+	var sprites := ["player","wood","stone","fiber","iron_ore","charcoal","iron_ingot",
+		"berry","meat","water","iron_blade","purify_amulet","tree","bush","rock","anvil"]
+	for key in sprites:
+		_save_sprite(key, "res://assets/%s.png" % key)
+	# 2. 生成地图 PNG（固定种子，与 world.gd 一致）
+	_save_map("res://assets/map.png")
+	print("[Orgc] 所有资源 PNG 已生成到 res://assets/")
+	quit()
+
+func _ensure_dir(path: String) -> void:
+	var d := DirAccess.open("res://")
+	if not d.dir_exists(path):
+		d.make_dir_recursive(path)
+
+func _save_sprite(key: String, path: String) -> void:
+	var img := _build_figure(key)
+	img.save_png(path)
+	print("[Orgc] 已保存 %s (%dx%d)" % [path, img.get_width(), img.get_height()])
+
 func _build_figure(key: String) -> Image:
 	var rows: Array = _pattern(key)
 	var h: int = rows.size()
@@ -88,11 +60,110 @@ func _build_figure(key: String) -> Image:
 			if x < row.length():
 				ch = row[x]
 			var c: Color = PAL.get(ch, Color(0,0,0,0))
-			# 像素画惯例：第0行为顶部，纹理顶部 = y 最大
 			img.set_pixel(x, h-1-y, c)
 	return img
 
-# 16x16 像素图案（ASCII 调色板手绘）
+# ============ 地图生成（与 world.gd 逻辑一致，固定种子） ============
+const WORLD_SIZE := 80
+const TILE_PX := 16
+const TILE_SCALE := 0.08
+const OCTAVES := 4
+
+func _save_map(path: String) -> void:
+	var tile_colors := {
+		"water":  [Color(0.27,0.51,0.82), Color(0.16,0.35,0.63)],
+		"sand":   [Color(0.87,0.80,0.55), Color(0.71,0.63,0.39)],
+		"grass":  [Color(0.42,0.67,0.25), Color(0.24,0.43,0.16)],
+		"grass2": [Color(0.48,0.74,0.31), Color(0.27,0.47,0.19)],
+		"dirt":   [Color(0.56,0.39,0.25), Color(0.35,0.25,0.16)],
+		"stone":  [Color(0.51,0.51,0.54), Color(0.31,0.31,0.35)],
+		"snow":   [Color(0.91,0.94,0.97), Color(0.75,0.78,0.84)],
+	}
+	# 预生成 tile 图
+	var tile_images: Dictionary = {}
+	for tname in tile_colors:
+		tile_images[tname] = _make_tile_image(tile_colors[tname][0], tile_colors[tname][1], tname)
+	# 生成地形
+	var seed_x := 1000.0
+	var seed_y := 2000.0
+	var map_size := WORLD_SIZE * TILE_PX
+	var map_img := Image.create(map_size, map_size, false, Image.FORMAT_RGBA8)
+	var half := WORLD_SIZE / 2
+	for y in range(WORLD_SIZE):
+		for x in range(WORLD_SIZE):
+			var h := _fbm((seed_x + x) * TILE_SCALE, (seed_y + y) * TILE_SCALE, OCTAVES)
+			var tname := _choose_tile(h)
+			var tile_img: Image = tile_images[tname]
+			var dst_x := (x - half) * TILE_PX + map_size / 2
+			var dst_y := (y - half) * TILE_PX + map_size / 2
+			map_img.blit_rect(tile_img, Rect2i(0, 0, TILE_PX, TILE_PX), Vector2i(dst_x, dst_y))
+	map_img.save_png(path)
+	print("[Orgc] 已保存 %s (%dx%d)" % [path, map_img.get_width(), map_img.get_height()])
+
+func _make_tile_image(base: Color, edge: Color, name: String) -> Image:
+	var img := Image.create(TILE_PX, TILE_PX, false, Image.FORMAT_RGBA8)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(name)
+	for y in range(TILE_PX):
+		for x in range(TILE_PX):
+			var c: Color
+			var n := rng.randi_range(-12, 12)
+			var is_edge := x == 0 or y == 0 or x == TILE_PX-1 or y == TILE_PX-1
+			if is_edge:
+				c = edge
+			else:
+				c = Color(clamp(base.r*255+n,0,255)/255.0,
+						  clamp(base.g*255+n,0,255)/255.0,
+						  clamp(base.b*255+n,0,255)/255.0, 1.0)
+			img.set_pixel(x, y, c)
+	return img
+
+func _choose_tile(h: float) -> String:
+	if h < 0.30: return "water"
+	if h < 0.36: return "sand"
+	if h < 0.55: return "grass"
+	if h < 0.62: return "grass2"
+	if h < 0.74: return "dirt"
+	if h < 0.88: return "stone"
+	return "snow"
+
+func _noise2d(x: float, y: float) -> float:
+	var xi: int = int(floor(x)) & 255
+	var yi: int = int(floor(y)) & 255
+	var xf: float = x - floor(x)
+	var yf: float = y - floor(y)
+	var u: float = xf * xf * xf * (xf * (xf * 6.0 - 15.0) + 10.0)
+	var v: float = yf * yf * yf * (yf * (yf * 6.0 - 15.0) + 10.0)
+	var a: float = _grad(_hash(xi, yi), xf, yf)
+	var b: float = _grad(_hash(xi+1, yi), xf-1, yf)
+	var c: float = _grad(_hash(xi, yi+1), xf, yf-1)
+	var d: float = _grad(_hash(xi+1, yi+1), xf-1, yf-1)
+	var n: float = lerpf(lerpf(a, b, u), lerpf(c, d, u), v)
+	return 0.5 + 0.5 * n
+
+func _hash(x: int, y: int) -> int:
+	var h := (x * 374761393 + y * 668265263) & 0x7FFFFFFF
+	return h
+
+func _grad(hash_val: int, x: float, y: float) -> float:
+	var h: int = hash_val & 7
+	var u: float = x if h < 4 else y
+	var v: float = y if h < 4 else x
+	return ((-u) if (h & 1) else u) + ((-2.0*v) if (h & 2) else (2.0*v))
+
+func _fbm(x: float, y: float, octaves: int) -> float:
+	var amp := 0.5
+	var freq := 1.0
+	var sum := 0.0
+	var norm := 0.0
+	for i in range(octaves):
+		sum += amp * _noise2d(x * freq, y * freq)
+		norm += amp
+		amp *= 0.5
+		freq *= 2.0
+	return sum / norm
+
+# ============ 精灵图案（与 pixel_art.gd 完全一致） ============
 func _pattern(key: String) -> Array:
 	match key:
 		"player": return [
