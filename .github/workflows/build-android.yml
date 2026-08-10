@@ -121,8 +121,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
         run: |
           gh release create "$TAG" release/OrangeWilderness.apk \
+            --repo "$REPO" \
             --title "《橘子荒野》$TAG" \
             --notes "Orgc橘子工作室 出品 · 像素风荒野生存开放世界
 
