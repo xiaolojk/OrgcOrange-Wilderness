@@ -1,6 +1,6 @@
 # world.gd — 世界系统：程序化地形 + 昼夜 + 天气
 # Orgc橘子工作室 · 《橘子荒野》
-# 用 _draw() 直接绘制地形（避免 TileSet/TileMapLayer 在 Android 上的兼容问题）
+# 用单个 Sprite2D 显示预渲染整张地图（最可靠，兼容所有设备）
 class_name WorldSystem
 extends Node2D
 
@@ -18,17 +18,18 @@ var _seed_y := 2000.0
 
 # 地形数据：二维数组存 tile 类型名
 var _grid: Array = []
-# tile 类型名 -> ImageTexture
-var _tile_textures: Dictionary = {}
+# 整张地图的 Sprite2D
+var _map_sprite: Sprite2D
 
 signal time_changed(t)
 signal weather_changed(w)
 
 func _ready() -> void:
-	_build_tile_textures()
 	_generate_terrain()
-	visible = true  # 确保可见
-	z_index = 0  # 正常层级（不要负值，避免被相机剔除）
+	_build_map_sprite()
+	visible = true
+	z_index = 0
+	print("[Orgc] 世界 _ready 完成，地图尺寸=%dx%d" % [WORLD_SIZE * TILE_PX, WORLD_SIZE * TILE_PX])
 
 func is_night() -> bool:
 	return time_of_day < 0.22 or time_of_day > 0.78
@@ -48,9 +49,30 @@ func ambient_color() -> Color:
 	if weather == "雾": light *= 0.92
 	return Color(light, light * 0.96, light * 1.02, 1.0)
 
-# ============ 地形纹理 ============
-func _build_tile_textures() -> void:
-	var tiles := {
+# ============ 地形生成 ============
+func _generate_terrain() -> void:
+	_grid.clear()
+	var half := WORLD_SIZE / 2
+	for y in range(WORLD_SIZE):
+		var row: Array = []
+		for x in range(WORLD_SIZE):
+			var h := _fbm((_seed_x + x) * TILE_SCALE, (_seed_y + y) * TILE_SCALE, OCTAVES)
+			row.append(_choose_tile(h))
+		_grid.append(row)
+
+func _choose_tile(h: float) -> String:
+	if h < 0.30: return "water"
+	if h < 0.36: return "sand"
+	if h < 0.55: return "grass"
+	if h < 0.62: return "grass2"
+	if h < 0.74: return "dirt"
+	if h < 0.88: return "stone"
+	return "snow"
+
+# ============ 预渲染整张地图到单个 Image，用 Sprite2D 显示 ============
+func _build_map_sprite() -> void:
+	# tile 颜色配置
+	var tile_colors := {
 		"water":  [Color(0.27,0.51,0.82), Color(0.16,0.35,0.63)],
 		"sand":   [Color(0.87,0.80,0.55), Color(0.71,0.63,0.39)],
 		"grass":  [Color(0.42,0.67,0.25), Color(0.24,0.43,0.16)],
@@ -59,11 +81,36 @@ func _build_tile_textures() -> void:
 		"stone":  [Color(0.51,0.51,0.54), Color(0.31,0.31,0.35)],
 		"snow":   [Color(0.91,0.94,0.97), Color(0.75,0.78,0.84)],
 	}
-	for tname in tiles:
-		var img := _make_tile_image(tiles[tname][0], tiles[tname][1], tname)
-		var tex := ImageTexture.new()
-		tex.create_from_image(img)
-		_tile_textures[tname] = tex
+	# 为每种 tile 预生成 16x16 像素图
+	var tile_images: Dictionary = {}
+	for tname in tile_colors:
+		tile_images[tname] = _make_tile_image(tile_colors[tname][0], tile_colors[tname][1], tname)
+
+	# 拼接成大图
+	var map_size := WORLD_SIZE * TILE_PX
+	var map_img := Image.create(map_size, map_size, false, Image.FORMAT_RGBA8)
+	var half := WORLD_SIZE / 2
+	for y in range(WORLD_SIZE):
+		for x in range(WORLD_SIZE):
+			var tname: String = _grid[y][x]
+			var tile_img: Image = tile_images.get(tname)
+			if tile_img == null:
+				continue
+			var dst_x := (x - half) * TILE_PX + map_size / 2
+			var dst_y := (y - half) * TILE_PX + map_size / 2
+			map_img.blit_rect(tile_img, Rect2i(0, 0, TILE_PX, TILE_PX), Vector2i(dst_x, dst_y))
+
+	# 创建纹理 + Sprite2D
+	var tex := ImageTexture.new()
+	tex.create_from_image(map_img)
+	_map_sprite = Sprite2D.new()
+	_map_sprite.texture = tex
+	_map_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	# 居中：地图中心对齐世界原点 (0,0)
+	_map_sprite.centered = true
+	_map_sprite.position = Vector2.ZERO
+	add_child(_map_sprite)
+	print("[Orgc] 地图 Sprite 已创建，纹理尺寸=%dx%d" % [tex.get_width(), tex.get_height()])
 
 func _make_tile_image(base: Color, edge: Color, name: String) -> Image:
 	var img := Image.create(TILE_PX, TILE_PX, false, Image.FORMAT_RGBA8)
@@ -82,41 +129,6 @@ func _make_tile_image(base: Color, edge: Color, name: String) -> Image:
 						  clamp(base.b*255+n,0,255)/255.0, 1.0)
 			img.set_pixel(x, y, c)
 	return img
-
-# ============ 地形生成 ============
-func _generate_terrain() -> void:
-	_grid.clear()
-	var half := WORLD_SIZE / 2
-	for y in range(WORLD_SIZE):
-		var row: Array = []
-		for x in range(WORLD_SIZE):
-			var h := _fbm((_seed_x + x) * TILE_SCALE, (_seed_y + y) * TILE_SCALE, OCTAVES)
-			row.append(_choose_tile(h))
-		_grid.append(row)
-	# 生成后立即重绘
-	queue_redraw()
-
-func _choose_tile(h: float) -> String:
-	if h < 0.30: return "water"
-	if h < 0.36: return "sand"
-	if h < 0.55: return "grass"
-	if h < 0.62: return "grass2"
-	if h < 0.74: return "dirt"
-	if h < 0.88: return "stone"
-	return "snow"
-
-# ============ 绘制 ============
-func _draw() -> void:
-	var half := WORLD_SIZE / 2
-	for y in range(WORLD_SIZE):
-		for x in range(WORLD_SIZE):
-			var tname: String = _grid[y][x]
-			var tex: Texture2D = _tile_textures.get(tname)
-			if tex == null:
-				continue
-			var px: float = (x - half) * TILE_PX
-			var py: float = (y - half) * TILE_PX
-			draw_texture(tex, Vector2(px, py))
 
 # Simplex 风格噪声（GDScript 实现，确定性）
 func _noise2d(x: float, y: float) -> float:
@@ -187,3 +199,4 @@ func _roll_weather() -> void:
 	else: weather = "雾"
 	if weather != prev:
 		emit_signal("weather_changed", weather)
+
