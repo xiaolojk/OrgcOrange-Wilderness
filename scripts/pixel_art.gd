@@ -107,11 +107,11 @@ func _enhance_pixel_art(img: Image) -> Image:
 				outlined.set_pixel(x, y, c)
 			else:
 				var has_neighbor := false
-				for dx in [-1, 0, 1]:
-					for dy in [-1, 0, 1]:
+				for dx in range(-1, 2):
+					for dy in range(-1, 2):
 						if dx == 0 and dy == 0: continue
-						var nx := x + dx
-						var ny := y + dy
+						var nx: int = x + dx
+						var ny: int = y + dy
 						if nx >= 0 and nx < w and ny >= 0 and ny < h:
 							if img.get_pixel(nx, ny).a > 0:
 								has_neighbor = true
