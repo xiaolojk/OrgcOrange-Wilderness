@@ -56,16 +56,15 @@ jobs:
           echo "JAVA_HOME=$JAVA_HOME"
           echo "ANDROID_HOME=$ANDROID_HOME"
 
-      - name: 生成 debug keystore
+      - name: 生成 debug keystore（项目根目录，供 export preset 引用）
         run: |
-          mkdir -p ~/.local/share/godot/keystores
-          if [ ! -f ~/.local/share/godot/keystores/debug.keystore ]; then
-            keytool -genkeypair -keystore ~/.local/share/godot/keystores/debug.keystore \
+          if [ ! -f debug.keystore ]; then
+            keytool -genkeypair -keystore debug.keystore \
               -storepass android -alias androiddebugkey -keypass android \
               -keyalg RSA -keysize 2048 -validity 10000 \
               -dname "CN=OrgcOrange, OU=Orgc, O=Orgc橘子工作室, L=CN, ST=CN, C=CN"
           fi
-          ls -lh ~/.local/share/godot/keystores/debug.keystore
+          ls -lh debug.keystore
 
       - name: 配置 Godot editor settings
         run: |
@@ -77,13 +76,12 @@ jobs:
             SETTINGS=~/.config/godot/editor_settings-4.tres
           fi
           echo "=== 修改前 ==="
-          grep -E "android_sdk_path|java_sdk_path|debug_keystore " "$SETTINGS" || true
-          # 替换 SDK / JDK / keystore 路径
+          grep -E "android_sdk_path|java_sdk_path" "$SETTINGS" || true
+          # 替换 SDK / JDK 路径（keystore 由 export preset 指定）
           sed -i "s|export/android/android_sdk_path = .*|export/android/android_sdk_path = \"$ANDROID_HOME\"|" "$SETTINGS"
           sed -i "s|export/android/java_sdk_path = .*|export/android/java_sdk_path = \"$JAVA_HOME\"|" "$SETTINGS"
-          sed -i "s|export/android/debug_keystore = .*|export/android/debug_keystore = \"$HOME/.local/share/godot/keystores/debug.keystore\"|" "$SETTINGS"
           echo "=== 修改后 ==="
-          grep -E "android_sdk_path|java_sdk_path|debug_keystore " "$SETTINGS"
+          grep -E "android_sdk_path|java_sdk_path" "$SETTINGS"
 
       - name: 导入项目资源（生成 ETC2/ASTC 纹理）
         run: |
@@ -95,6 +93,11 @@ jobs:
           mkdir -p build
           /tmp/godot/godot --headless --export-release "Android" build/OrangeWilderness.apk
           ls -lh build/
+          # 验证 APK 已签名（vivo 等国产 ROM 拒绝未签名 APK）
+          echo "=== 签名验证 ==="
+          jarsigner -verify -verbose build/OrangeWilderness.apk 2>&1 | tail -5
+          echo "=== APK 信息 ==="
+          unzip -l build/OrangeWilderness.apk | grep -E "\.so$" || true
 
       - name: 上传 APK 构建产物
         uses: actions/upload-artifact@v4
