@@ -92,6 +92,19 @@ jobs:
           /tmp/godot/godot --headless --script res://scripts/generate_icons.gd 2>&1 | tail -10
           ls -lh icons/
 
+      - name: 运行时验证（headless 运行捕获脚本错误）
+        run: |
+          echo "=== 运行游戏 120 帧，捕获错误 ==="
+          timeout 30 /tmp/godot/godot --headless --path . --quit-after 120 2>&1 | tee runtime.log | head -80
+          echo "=== 错误统计 ==="
+          grep -c "ERROR\|SCRIPT ERROR\|Parse Error" runtime.log || echo "0 errors"
+          if grep -q "SCRIPT ERROR\|Parse Error\|Cannot\|Invalid" runtime.log; then
+            echo "!!! 检测到脚本错误，构建失败 !!!"
+            grep -E "SCRIPT ERROR|Parse Error|Cannot|Invalid|at: " runtime.log | head -20
+            exit 1
+          fi
+          echo "=== 运行时验证通过 ==="
+
       - name: 导出 APK（未签名）
         run: |
           set -e
