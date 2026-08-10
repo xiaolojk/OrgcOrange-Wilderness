@@ -47,7 +47,7 @@ func _init() -> void:
 		"npc_elder","npc_elder2","npc_child","npc_child2"]
 	for key in npcs:
 		# NPC 第二帧用第一帧的图（轻微变体）
-		var base_key := key.rstrip("2")
+		var base_key: String = key.rstrip("2")
 		if not _try_hq(base_key, "res://assets/%s.png" % key, 64):
 			_save_sprite(key, "res://assets/%s.png" % key)
 	# 4. 生成地图 PNG
@@ -67,17 +67,26 @@ func _try_hq(key: String, out_path: String, size: int) -> bool:
 	# 先缩小到 256x256 加速色度键处理
 	img.resize(256, 256, Image.INTERPOLATE_LANCZOS)
 	# 取四角颜色作为背景色
-	var bg := img.get_pixel(0, 0)
-	bg += img.get_pixel(255, 0)
-	bg += img.get_pixel(0, 255)
-	bg += img.get_pixel(255, 255)
-	bg = bg / 4.0
+	var c1 := img.get_pixel(0, 0)
+	var c2 := img.get_pixel(255, 0)
+	var c3 := img.get_pixel(0, 255)
+	var c4 := img.get_pixel(255, 255)
+	var bg := Color(
+		(c1.r + c2.r + c3.r + c4.r) / 4.0,
+		(c1.g + c2.g + c3.g + c4.g) / 4.0,
+		(c1.b + c2.b + c3.b + c4.b) / 4.0
+	)
 	# 色度键：与背景色接近的像素设为透明
 	var threshold := 0.20
 	for y in range(256):
 		for x in range(256):
 			var c := img.get_pixel(x, y)
-			if c.distance_to(bg) < threshold:
+			# 手动计算 RGB 距离（Color 没有 distance_to 方法）
+			var dr := c.r - bg.r
+			var dg := c.g - bg.g
+			var db := c.b - bg.b
+			var dist := sqrt(dr*dr + dg*dg + db*db)
+			if dist < threshold:
 				img.set_pixel(x, y, Color(0, 0, 0, 0))
 	# 缩小到目标尺寸（最近邻保持像素感）
 	img.resize(size, size, Image.INTERPOLATE_NEAREST)
