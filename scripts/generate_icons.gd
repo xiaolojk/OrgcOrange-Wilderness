@@ -59,10 +59,10 @@ func _make_app_icon(path: String, sz: int) -> void:
 	# 顶部叶子
 	var leaf_y := cy - rad - sz * 0.04
 	for y in range(int(leaf_y - sz * 0.03), int(leaf_y + sz * 0.05)):
-		for x in range(cx - sz * 0.06, cx + sz * 0.10):
+		for x in range(cx - int(sz * 0.06), cx + int(sz * 0.10)):
 			if x >= 0 and x < sz and y >= 0 and y < sz:
-				var dx := abs(x - (cx + sz * 0.02)) / (sz * 0.08)
-				var dy := abs(y - leaf_y) / (sz * 0.04)
+				var dx: float = abs(x - (cx + sz * 0.02)) / (sz * 0.08)
+				var dy: float = abs(y - leaf_y) / (sz * 0.04)
 				if dx + dy < 1.0:
 					img.set_pixel(x, y, Color(0.30, 0.55, 0.18, 1.0))
 	# "Orgc" 文字（底部，简化像素字）
@@ -98,8 +98,8 @@ func _make_splash(path: String, w: int, h: int) -> void:
 	for y in range(leaf_y - 20, leaf_y + 20):
 		for x in range(cx - 24, cx + 40):
 			if x >= 0 and x < w and y >= 0 and y < h:
-				var dx := abs(x - (cx + 8)) / 32.0
-				var dy := abs(y - leaf_y) / 16.0
+				var dx: float = abs(x - (cx + 8)) / 32.0
+				var dy: float = abs(y - leaf_y) / 16.0
 				if dx + dy < 1.0:
 					img.set_pixel(x, y, Color(0.30, 0.55, 0.18, 1.0))
 	# 工作室名
