@@ -29,7 +29,7 @@ const PAL := {
 func _init() -> void:
 	_ensure_dir("res://assets")
 	# 1. 生成所有精灵 PNG（16x16）
-	var sprites := ["player","wood","stone","fiber","iron_ore","charcoal","iron_ingot",
+	var sprites := ["player","player_walk","wood","stone","fiber","iron_ore","charcoal","iron_ingot",
 		"berry","meat","water","iron_blade","purify_amulet","tree","bush","rock","anvil"]
 	for key in sprites:
 		_save_sprite(key, "res://assets/%s.png" % key)
@@ -37,10 +37,13 @@ func _init() -> void:
 	var buildings := ["house","tent","campfire","well","fence"]
 	for key in buildings:
 		_save_building(key, "res://assets/%s.png" % key)
-	# 3. 生成 NPC PNG（16x16，不同颜色服装）
-	var npcs := ["npc_villager","npc_merchant","npc_hunter"]
+	# 3. 生成 NPC PNG（16x16，不同颜色服装）+ 第二帧（动作）
+	var npcs := ["npc_villager","npc_merchant","npc_hunter",
+		"npc_villager2","npc_merchant2","npc_hunter2",
+		"npc_elder","npc_elder2","npc_child","npc_child2"]
 	for key in npcs:
 		_save_sprite(key, "res://assets/%s.png" % key)
+	# 主角走路第二帧已含在上方 sprites 列表
 	# 4. 生成地图 PNG（固定种子，与 world.gd 一致）
 	_save_map("res://assets/map.png")
 	print("[Orgc] 所有资源 PNG 已生成到 res://assets/")
@@ -654,6 +657,23 @@ func _pattern(key: String) -> Array:
 			"    pPppPp      ",
 			"    PP  PP      ",
 			"    SS  SS      "]
+		"npc_villager2": return [
+			"     hhhhh      ",
+			"    hhHHHhh     ",
+			"    hHHHHHh     ",
+			"    sssSsss     ",
+			"    s s s s     ",
+			"   #bbbbbbb#    ",
+			"  #bBBBBBBBb#   ",
+			"  #bBBBBBBBb#   ",
+			"  #bBBBbBBBb#   ",
+			"   #bbbbbbb#    ",
+			"    pppppp      ",
+			"   pPppPp       ",
+			"    PP  P       ",
+			"   SS   S       ",
+			"   ##   ##      ",
+			"                "]
 		"npc_merchant": return [
 			"                ",
 			"     hhhhh      ",
@@ -671,6 +691,23 @@ func _pattern(key: String) -> Array:
 			"    pPppPp      ",
 			"    PP  PP      ",
 			"    SS  SS      "]
+		"npc_merchant2": return [
+			"     hhhhh      ",
+			"    hhHHHhh     ",
+			"    hHHHHHh     ",
+			"    sssSsss     ",
+			"    s s s s     ",
+			"   #mmmmmmm#    ",
+			"  #mMMMMMMMm#   ",
+			"  #mMMMMMMMm#   ",
+			"  #mMMMmMMMm#   ",
+			"   #mmmmmmm#    ",
+			"    pppppp      ",
+			"   pPppPp       ",
+			"    PP  P       ",
+			"   SS   S       ",
+			"   ##   ##      ",
+			"                "]
 		"npc_hunter": return [
 			"                ",
 			"     HHHHH      ",
@@ -688,6 +725,91 @@ func _pattern(key: String) -> Array:
 			"    pPppPp      ",
 			"    PP  PP      ",
 			"    SS  SS      "]
+		"npc_hunter2": return [
+			"     HHHHH      ",
+			"    HHhhhHH     ",
+			"    HhhhhhH     ",
+			"    sssSsss     ",
+			"    s s s s     ",
+			"   #ggggggg#    ",
+			"  #gGGGGGGGg#   ",
+			"  #gGGGGGGGg#   ",
+			"  #gGGGgGGGg#   ",
+			"   #ggggggg#    ",
+			"    pppppp      ",
+			"   pPppPp       ",
+			"    PP  P       ",
+			"   SS   S       ",
+			"   ##   ##      ",
+			"                "]
+		"npc_elder": return [
+			"                ",
+			"     WWWWW      ",
+			"    WWhhhWW     ",
+			"    WhHHHWw     ",
+			"    sssSsss     ",
+			"    s s s s     ",
+			"   #MMMMMMM#    ",
+			"  #MmmmmmmmM#   ",
+			"  #MmmmmmmmM#   ",
+			"  #MmmMmMmmM#   ",
+			"   #MMMMMMM#    ",
+			"    pppppp      ",
+			"    PP  PP      ",
+			"    PP  PP      ",
+			"    SS  SS      ",
+			"    ##  ##      "]
+		"npc_elder2": return [
+			"     WWWWW      ",
+			"    WWhhhWW     ",
+			"    WhHHHWw     ",
+			"    sssSsss     ",
+			"    s s s s     ",
+			"   #MMMMMMM#    ",
+			"  #MmmmmmmmM#   ",
+			"  #MmmmmmmmM#   ",
+			"  #MmmMmMmmM#   ",
+			"   #MMMMMMM#    ",
+			"    pppppp      ",
+			"   PP  PP       ",
+			"   SS  SS       ",
+			"   ##  ##       ",
+			"                ",
+			"                "]
+		"npc_child": return [
+			"                ",
+			"                ",
+			"     hhhhh      ",
+			"    hhHHHhh     ",
+			"    sssSsss     ",
+			"    s s s s     ",
+			"   #rrrrrrr#    ",
+			"  #rRRRRRRRr#   ",
+			"  #rRRRrRRRr#   ",
+			"   #rrrrrrr#    ",
+			"    pppppp      ",
+			"    pPppPp      ",
+			"    PP  PP      ",
+			"                ",
+			"                ",
+			"                "]
+		"npc_child2": return [
+			"                ",
+			"     hhhhh      ",
+			"    hhHHHhh     ",
+			"    sssSsss     ",
+			"    s s s s     ",
+			"   #rrrrrrr#    ",
+			"  #rRRRRRRRr#   ",
+			"  #rRRRrRRRr#   ",
+			"   #rrrrrrr#    ",
+			"    pppppp      ",
+			"   pPppPp       ",
+			"   PP  P        ",
+			"   S    S       ",
+			"                ",
+			"                ",
+			"                "]
 		_: return [
 			"                ",
 			"    ########    ",

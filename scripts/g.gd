@@ -12,6 +12,7 @@ var forge: Node2D = null       # ForgeAnvil
 var quest: Node = null         # QuestSystem
 var pix: Node = null           # PixelArt
 var ui: Node = null            # UI 根
+var town_center: Vector2 = Vector2(220, 160)  # 橘子镇中心位置（玩家需寻找）
 
 # 事件
 signal item_obtained(id, n)

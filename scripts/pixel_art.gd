@@ -112,6 +112,23 @@ func _pattern(key: String) -> Array:
 			"    PP  PP      ",
 			"    SS  SS      ",
 			"    ##  ##      "]
+		"player_walk": return [
+			"                ",
+			"     hhhhh      ",
+			"    hhHHHhh     ",
+			"    hHHHHHh     ",
+			"    sssSsss     ",
+			"    s s s s     ",
+			"   #ccccccc#    ",
+			"  #ccecccccc#   ",
+			"  #ccccccccc#   ",
+			"  #cCCccccCCc#  ",
+			"   #ccccccc#    ",
+			"    pppppp      ",
+			"   pPppPp       ",
+			"    PP  P       ",
+			"   SS   S       ",
+			"   ##   ##      "]
 		"wood": return [
 			"                ",
 			"   llllllll     ",

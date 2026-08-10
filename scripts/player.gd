@@ -1,25 +1,38 @@
-# player.gd — 玩家：触屏摇杆 + 键盘移动 + 交互
+# player.gd — 玩家：触屏摇杆 + 键盘移动 + 交互 + 走路动画
 # Orgc橘子工作室 · 《橘子荒野》
 class_name Player
 extends CharacterBody2D
 
 const MOVE_SPEED := 180.0
-const INTERACT_RADIUS := 56.0
+const INTERACT_RADIUS := 70.0
+const WALK_FRAME_TIME := 0.14  # 走路帧切换间隔
 
 var move_input := Vector2.ZERO  # 由 TouchControls 写入；键盘叠加
 var sprite: Sprite2D
+var sprite_walk: Sprite2D  # 走路第二帧
 var nearby: Node2D = null  # IInteractable 节点
 
 # 背包：id -> 数量
 var inventory := {}
+
+var _walk_timer := 0.0
+var _walk_frame := false  # false=静止帧, true=走路帧
+var _last_moving := false
 
 func _ready() -> void:
 	sprite = Sprite2D.new()
 	sprite.texture = G.pix.get_sprite("player")
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	sprite.centered = true
-	sprite.scale = Vector2(2, 2)  # 放大玩家
+	sprite.scale = Vector2(3, 3)  # 放大玩家
 	add_child(sprite)
+	sprite_walk = Sprite2D.new()
+	sprite_walk.texture = G.pix.get_sprite("player_walk")
+	sprite_walk.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	sprite_walk.centered = true
+	sprite_walk.scale = Vector2(3, 3)
+	sprite_walk.visible = false
+	add_child(sprite_walk)
 	# 碰撞
 	var col := CollisionShape2D.new()
 	var rect := RectangleShape2D.new()
@@ -42,7 +55,22 @@ func _physics_process(dt: float) -> void:
 	move_and_slide()
 	if abs(move_input.x) > 0.01:
 		sprite.flip_h = move_input.x < 0.0
+		sprite_walk.flip_h = move_input.x < 0.0
 	var moving := velocity.length_squared() > 25.0
+	# 走路动画：移动时按间隔切换两帧；静止时显示第一帧
+	if moving:
+		_walk_timer += dt
+		if _walk_timer >= WALK_FRAME_TIME:
+			_walk_timer = 0.0
+			_walk_frame = not _walk_frame
+			sprite.visible = not _walk_frame
+			sprite_walk.visible = _walk_frame
+	else:
+		_walk_frame = false
+		sprite.visible = true
+		sprite_walk.visible = false
+		_walk_timer = 0.0
+	_last_moving = moving
 	if G.world != null and G.survival != null:
 		G.survival.tick(G.world, dt, moving)
 

@@ -56,6 +56,12 @@ func _ready() -> void:
 	G.player = player
 	print("[Orgc] 玩家出生点：", spawn, " 地形=", world.tile_type_at(spawn))
 
+	# 3.5 查找橘子镇中心位置（距离出生点 220~280 像素，确保在 grass/dirt 上）
+	# 玩家需要走一段路才能找到小镇
+	var town := _find_town_center(world, spawn)
+	G.town_center = town
+	print("[Orgc] 橘子镇中心：", town, " 地形=", world.tile_type_at(town))
+
 	# 4. 相机（直接作为 main 子节点，手动跟随玩家，最可靠）
 	_camera = Camera2D.new()
 	_camera.zoom = Vector2(2, 2)  # 降低放大倍数，避免视野过小
@@ -77,22 +83,23 @@ func _ready() -> void:
 	add_child(survival)
 	G.survival = survival
 
-	# 6. 资源节点
+	# 6. 资源节点（增加数量，让玩家有事可做）
 	_spawn_resources(world, player.position)
 
-	# 7. 锻造铁砧
+	# 7. 锻造铁砧（放在橘子镇内东北角，玩家找到镇子就能发现铁砧）
 	var anvil: Node2D = ForgeScript.new()
 	anvil.name = "Anvil"
-	anvil.position = Vector2(80, -32)
+	anvil.position = G.town_center + Vector2(70, -70)
 	add_child(anvil)
 	G.forge = anvil
 
-	# 8. 建筑物系统（房屋、帐篷、篝火等）
+	# 8. 建筑物系统（橘子镇 + 野外避难所）
 	var buildings: Node2D = BuildingScript.new()
 	buildings.name = "Buildings"
 	add_child(buildings)
+	buildings.spawn_wild(player.position)  # 出生点附近的避难所
 
-	# 9. NPC 系统（村民、商人、猎人）
+	# 9. NPC 系统（全部在橘子镇内）
 	var npcs: Node2D = NPCScript.new()
 	npcs.name = "NPCs"
 	add_child(npcs)
@@ -136,12 +143,13 @@ func _ready() -> void:
 	print("[Orgc] 橘子荒野 启动完成 — Orgc橘子工作室")
 
 func _spawn_resources(world: Node2D, center: Vector2) -> void:
+	# 增加资源数量，提升可玩性
 	var cfg := [
-		[ResourceNodeScript.Kind.TREE, 14],
-		[ResourceNodeScript.Kind.BUSH, 8],
-		[ResourceNodeScript.Kind.ROCK, 7],
-		[ResourceNodeScript.Kind.IRON_ORE, 5],
-		[ResourceNodeScript.Kind.WATER, 3],
+		[ResourceNodeScript.Kind.TREE, 22],
+		[ResourceNodeScript.Kind.BUSH, 14],
+		[ResourceNodeScript.Kind.ROCK, 12],
+		[ResourceNodeScript.Kind.IRON_ORE, 8],
+		[ResourceNodeScript.Kind.WATER, 5],
 	]
 	for entry in cfg:
 		var kind = entry[0]
@@ -149,11 +157,36 @@ func _spawn_resources(world: Node2D, center: Vector2) -> void:
 		for i in range(count):
 			var pos := _find_valid_pos(world, center)
 			if pos == Vector2.ZERO: continue
+			# 避免资源点正好落在橘子镇内（保留镇内空地）
+			if pos.distance_to(G.town_center) < 110.0: continue
 			var node: Area2D = ResourceNodeScript.new()
 			node.kind = kind
 			node.position = pos
 			node.name = "Res_%d_%d" % [kind, i]
 			add_child(node)
+
+# 查找橘子镇中心：距离出生点 220~320 像素，地形为 grass/dirt
+func _find_town_center(world: Node2D, spawn: Vector2) -> Vector2:
+	var candidates := []
+	# 候选方向：东南、东北、西南、西北（避免正好在出生点上方）
+	for angle_deg in [45, 135, 225, 315]:
+		var a := deg_to_rad(angle_deg)
+		for r in range(220, 340, 20):
+			candidates.append(spawn + Vector2(cos(a), sin(a)) * r)
+	for pos in candidates:
+		var t: String = world.tile_type_at(pos)
+		if t == "grass" or t == "grass2" or t == "dirt":
+			# 检查镇内 4 个角是否也大致可走
+			var ok := true
+			for off in [Vector2(70, -70), Vector2(70, 70), Vector2(-70, -70), Vector2(-70, 70)]:
+				var tt: String = world.tile_type_at(pos + off)
+				if tt == "water" or tt == "none":
+					ok = false
+					break
+			if ok:
+				return pos
+	# 兜底：返回默认位置
+	return Vector2(220, 160)
 
 func _find_valid_pos(world: Node2D, center: Vector2) -> Vector2:
 	for _i in range(30):
