@@ -17,6 +17,16 @@ var _camera: Camera2D
 func _ready() -> void:
 	Engine.max_fps = 60
 
+	# 0. 背景兜底层（即使地图没渲染也不会黑屏）
+	var bg_layer := CanvasLayer.new()
+	bg_layer.name = "Background"
+	bg_layer.layer = -100
+	add_child(bg_layer)
+	var bg_rect := ColorRect.new()
+	bg_rect.color = Color(0.16, 0.2, 0.26, 1)  # 深蓝绿，与默认 clear color 一致
+	bg_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg_layer.add_child(bg_rect)
+
 	# 1. 像素图集（已在 Autoload G._ready 中初始化，此处不再重复）
 
 	# 2. 世界
@@ -44,21 +54,20 @@ func _ready() -> void:
 	G.player = player
 	print("[Orgc] 玩家出生点：", spawn, " 地形=", world.tile_type_at(spawn))
 
-	# 4. 相机（必须 add_child 后再 make_current，且用 deferred 确保 scene tree 就绪）
+	# 4. 相机（直接作为 main 子节点，手动跟随玩家，最可靠）
 	_camera = Camera2D.new()
-	_camera.zoom = Vector2(3, 3)  # 放大像素
-	_camera.position_smoothing_enabled = true
-	_camera.position_smoothing_speed = 6.0
+	_camera.zoom = Vector2(2, 2)  # 降低放大倍数，避免视野过小
+	_camera.position_smoothing_enabled = false  # 关闭平滑，手动跟随
 	_camera.enabled = true
-	player.add_child(_camera)
-	_camera.make_current()
-	# 二次确认：下一帧再次设为 current（部分 Android 设备首帧会丢失相机）
-	call_deferred("_ensure_camera")
+	_camera.position = spawn  # 初始位置对齐玩家
+	add_child(_camera)
+	# 用 call_deferred 确保在 scene tree 完全构建后设为 current
+	call_deferred("_activate_camera")
 
 	# 诊断日志（帮助定位显示问题）
 	print("[Orgc] 世界节点: ", world, " 可见=", world.visible, " 子节点数=", world.get_child_count())
 	print("[Orgc] 玩家节点: ", player, " 位置=", player.position, " 子节点数=", player.get_child_count())
-	print("[Orgc] 相机: ", _camera, " enabled=", _camera.enabled, " is_current=", _camera.is_current())
+	print("[Orgc] 相机: ", _camera, " enabled=", _camera.enabled, " position=", _camera.position)
 
 	# 5. 生存系统
 	var survival: Node = SurvivalScript.new()
@@ -150,8 +159,13 @@ func _on_player_died() -> void:
 	await get_tree().create_timer(3.0).timeout
 	get_tree().reload_current_scene()
 
-func _ensure_camera() -> void:
-	# 下一帧再次确认相机为 current（修复部分设备首帧丢失相机）
-	if _camera != null and not _camera.is_current():
+func _activate_camera() -> void:
+	# 在 scene tree 完全构建后激活相机
+	if _camera != null:
 		_camera.make_current()
-		print("[Orgc] 相机重新设为 current")
+		print("[Orgc] 相机已激活 is_current=", _camera.is_current())
+
+func _process(_dt: float) -> void:
+	# 手动让相机跟随玩家（不依赖 position_smoothing）
+	if _camera != null and G.player != null:
+		_camera.position = G.player.position
