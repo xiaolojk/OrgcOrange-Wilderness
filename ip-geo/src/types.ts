@@ -1,5 +1,12 @@
 /* ================= 类型定义 ================= */
 
+/** 数据源 ID（与 api.ts SOURCES 对应） */
+export type SourceId = 'vore' | 'ipapi' | 'ipwho' | 'ipapico';
+/** 查询源选择：auto = 自动容错链 */
+export type QuerySource = 'auto' | SourceId;
+
+export type Lang = 'zh' | 'en';
+
 /** 统一的 IP 查询结果模型 */
 export interface IpResult {
   ip: string;
@@ -32,7 +39,8 @@ export type ThemeMode = 'auto' | 'light' | 'dark';
 export interface AppSettings {
   theme: ThemeMode;
   haptics: boolean;       // 震动反馈
-  autoQueryOnPaste?: boolean;
+  lang: Lang;             // 界面语言
+  source: QuerySource;    // 数据源选择
 }
 
 /** 查询目标解析结果 */

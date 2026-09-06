@@ -1,9 +1,9 @@
 {
   "name": "ip-geo-query",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.2",
   "type": "module",
-  "description": "🌐 IP 归属地查询安卓 APP | IP/域名查询·批量查询·历史·收藏·深色模式 | Capacitor + Vite + TS",
+  "description": "🌐 IP·GEO 归属地查询 | 双语中英 · 用户可选数据源 · 批量 · 收藏 · 深色模式 | Capacitor + Vite + TS",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

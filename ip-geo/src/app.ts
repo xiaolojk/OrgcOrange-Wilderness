@@ -1,5 +1,5 @@
-import type { AppSettings, IpResult, RecordItem } from './types';
-import { queryIp, getMyIp, resolveDomain } from './api';
+import type { AppSettings, IpResult, QuerySource, RecordItem } from './types';
+import { queryIp, getMyIp, resolveDomain, SOURCE_META } from './api';
 import {
   parseQueryTarget, flagEmoji, locationText, fmtTime, copyText, shareText,
 } from './ipUtils';
@@ -8,26 +8,32 @@ import {
   getFavs, isFav, toggleFav, removeFav, clearFavs,
   getSettings, saveSettings,
 } from './storage';
+import { T, type Dict } from './i18n';
 
-/* ================= UI 渲染与交互 ================= */
+/* ================= UI 渲染与交互（双语 + 可选数据源） ================= */
 
 type TabId = 'query' | 'batch' | 'history' | 'favs' | 'settings';
 
-const TABS: Array<{ id: TabId; icon: string; label: string }> = [
-  { id: 'query', icon: '🔍', label: '查询' },
-  { id: 'batch', icon: '📚', label: '批量' },
-  { id: 'history', icon: '🕘', label: '历史' },
-  { id: 'favs', icon: '⭐', label: '收藏' },
-  { id: 'settings', icon: '⚙️', label: '设置' },
+const TABS: ReadonlyArray<{ id: TabId; icon: string; k: keyof Dict }> = [
+  { id: 'query', icon: '◎', k: 'tabQuery' },
+  { id: 'batch', icon: '☰', k: 'tabBatch' },
+  { id: 'history', icon: '◷', k: 'tabHistory' },
+  { id: 'favs', icon: '★', k: 'tabFavs' },
+  { id: 'settings', icon: '⚙', k: 'tabSettings' },
 ];
+
+/** 数据源 id → i18n 描述键 */
+const SRC_KEY: Record<string, keyof Dict> = {
+  vore: 'srcVore', ipapi: 'srcIpapi', ipwho: 'srcIpwho', ipapico: 'srcIpapico',
+};
 
 export class App {
   private root: HTMLElement;
   private settings: AppSettings;
-  private currentTab: TabId = 'query';
-  private currentResult: IpResult | null = null;
-  private loading = false;
-  private batchResults: IpResult[] = [];
+  private tab: TabId = 'query';
+  private result: IpResult | null = null;
+  private busy = false;
+  private batch: IpResult[] = [];
   private batchTotal = 0;
   private batchDone = 0;
 
@@ -38,19 +44,25 @@ export class App {
     this.render();
   }
 
-  /* ---------- 主题 ---------- */
+  /* ---------- 基础 ---------- */
 
-  private applyTheme(): void {
-    const mode = this.settings.theme;
-    const dark =
-      mode === 'dark' ||
-      (mode === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', dark ? '#0f1420' : '#2563eb');
+  private get tr(): Dict { return T[this.settings.lang]; }
+
+  private isDark(): boolean {
+    const m = this.settings.theme;
+    return m === 'dark' || (m === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   }
 
-  /* ---------- 小工具 ---------- */
+  private applyTheme(): void {
+    document.documentElement.dataset.theme = this.isDark() ? 'dark' : 'light';
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', this.isDark() ? '#0b0d12' : '#f6f7f9');
+  }
+
+  /** 系统深浅色变化时由外部调用（auto 模式下实时生效） */
+  refreshTheme(): void {
+    this.applyTheme();
+    this.renderHeader();
+  }
 
   private toast(msg: string): void {
     const el = document.createElement('div');
@@ -70,42 +82,66 @@ export class App {
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
   }
 
-  /* ---------- 渲染骨架 ---------- */
+  /* ---------- 骨架 ---------- */
 
   private render(): void {
     this.root.innerHTML = `
-      <header class="app-header">
-        <div class="logo">🌐</div>
-        <h1>IP 归属地查询</h1>
-        <button class="header-btn" id="btn-myip">📍 我的IP</button>
-      </header>
-      <main id="tab-content"></main>
+      <header class="topbar" id="topbar"></header>
+      <main id="main"></main>
       <nav class="tabbar"><div class="tabbar-inner" id="tabbar"></div></nav>
     `;
+    this.renderHeader();
     this.renderTabbar();
     this.renderTab();
-    document.getElementById('btn-myip')!.addEventListener('click', () => this.onMyIp());
+  }
+
+  private renderHeader(): void {
+    const bar = this.root.querySelector('#topbar')!;
+    const langBtn = this.settings.lang === 'zh' ? 'EN' : '中文';
+    bar.innerHTML = `
+      <div class="brand">
+        <div class="brand-mark">◈</div>
+        <div class="brand-text">
+          <div class="brand-name">IP·GEO</div>
+          <div class="brand-sub">${this.esc(this.tr.appName)}</div>
+        </div>
+      </div>
+      <button class="pill-btn" id="btn-myip" title="${this.esc(this.tr.myIp)}">⌖ <span class="myip-t">${this.esc(this.tr.myIp)}</span></button>
+      <button class="pill-btn" id="btn-lang" title="Language / 语言">${langBtn}</button>
+      <button class="pill-btn" id="btn-theme" title="${this.esc(this.tr.appearance)}">${this.isDark() ? '☾' : '☀'}</button>
+    `;
+    bar.querySelector('#btn-myip')!.addEventListener('click', () => void this.onMyIp());
+    bar.querySelector('#btn-lang')!.addEventListener('click', () => {
+      this.settings.lang = this.settings.lang === 'zh' ? 'en' : 'zh';
+      saveSettings(this.settings);
+      this.haptic();
+      this.render();
+    });
+    bar.querySelector('#btn-theme')!.addEventListener('click', () => {
+      this.settings.theme = this.isDark() ? 'light' : 'dark';
+      saveSettings(this.settings);
+      this.applyTheme();
+      this.renderHeader();
+    });
   }
 
   private renderTabbar(): void {
-    const bar = document.getElementById('tabbar')!;
-    bar.innerHTML = TABS.map(
-      (t) => `<button class="tab-item ${t.id === this.currentTab ? 'on' : ''}" data-tab="${t.id}">
-        <span class="icon">${t.icon}</span><span>${t.label}</span></button>`
-    ).join('');
-    bar.querySelectorAll('.tab-item').forEach((b) =>
+    const bar = this.root.querySelector('#tabbar')!;
+    bar.innerHTML = TABS.map((t) =>
+      `<button class="tab ${t.id === this.tab ? 'on' : ''}" data-tab="${t.id}">
+        <span class="ic">${t.icon}</span><span>${this.esc(this.tr[t.k])}</span></button>`).join('');
+    bar.querySelectorAll('.tab').forEach((b) =>
       b.addEventListener('click', () => {
-        this.currentTab = (b as HTMLElement).dataset.tab as TabId;
+        this.tab = (b as HTMLElement).dataset.tab as TabId;
         this.haptic();
         this.renderTabbar();
         this.renderTab();
-      })
-    );
+      }));
   }
 
   private renderTab(): void {
-    const main = document.getElementById('tab-content')!;
-    switch (this.currentTab) {
+    const main = this.root.querySelector('#main') as HTMLElement;
+    switch (this.tab) {
       case 'query': this.renderQueryTab(main); break;
       case 'batch': this.renderBatchTab(main); break;
       case 'history': this.renderHistoryTab(main); break;
@@ -117,326 +153,358 @@ export class App {
   /* ================= Tab：查询 ================= */
 
   private renderQueryTab(main: HTMLElement): void {
-    const history = getHistory().slice(0, 6);
+    const recent = getHistory().slice(0, 5);
     main.innerHTML = `
-      <div class="search-box">
+      <section class="panel">
         <div class="search-row">
-          <input class="search-input" id="q-input" placeholder="输入 IP 地址或域名，如 8.8.8.8 / baidu.com"
+          <input id="q-input" class="input mono" placeholder="${this.esc(this.tr.searchPlaceholder)}"
             autocomplete="off" autocapitalize="off" spellcheck="false">
-          <button class="btn btn-primary" id="q-btn">查询</button>
+          <button id="q-btn" class="btn-primary">${this.esc(this.tr.query)}</button>
         </div>
-        <div class="search-tips" id="q-tips">
-          ${history.map((h) => `<span class="tip-chip" data-ip="${this.esc(h.result.ip)}">${this.esc(h.result.ip)}</span>`).join('')}
+        <div class="source-row">
+          <span class="source-label">${this.esc(this.tr.sourceLabel)}</span>
+          <div class="seg" id="src-seg">
+            <button data-src="auto" class="${this.settings.source === 'auto' ? 'on' : ''}">${this.esc(this.tr.auto)}</button>
+            ${SOURCE_META.map((s) =>
+              `<button data-src="${s.id}" class="${this.settings.source === s.id ? 'on' : ''}">${s.name}</button>`).join('')}
+          </div>
         </div>
-      </div>
+        <div class="chips" id="q-tips" style="display:${recent.length ? 'flex' : 'none'}">
+          ${recent.map((h) => `<span class="chip" data-ip="${this.esc(h.result.ip)}">${this.esc(h.result.ip)}</span>`).join('')}
+        </div>
+      </section>
       <div id="q-status"></div>
     `;
-    const input = document.getElementById('q-input') as HTMLInputElement;
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') this.onQuery(input.value); });
-    document.getElementById('q-btn')!.addEventListener('click', () => this.onQuery(input.value));
-    document.getElementById('q-tips')!.querySelectorAll('.tip-chip').forEach((c) =>
-      c.addEventListener('click', () => { input.value = (c as HTMLElement).dataset.ip!; this.onQuery(input.value); })
-    );
-    // 当前有结果则直接展示
-    if (this.currentResult) this.renderResult(this.currentResult);
+    const input = main.querySelector('#q-input') as HTMLInputElement;
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') void this.onQuery(input.value); });
+    main.querySelector('#q-btn')!.addEventListener('click', () => void this.onQuery(input.value));
+    main.querySelectorAll('#src-seg button').forEach((b) =>
+      b.addEventListener('click', () => this.setSource((b as HTMLElement).dataset.src as QuerySource)));
+    this.bindChips();
+    if (this.result) this.renderResult(this.result);
+  }
+
+  /** 切换数据源（保留输入与已显示结果） */
+  private setSource(src: QuerySource): void {
+    if (this.settings.source === src) return;
+    this.settings.source = src;
+    saveSettings(this.settings);
+    this.haptic();
+    const val = (document.getElementById('q-input') as HTMLInputElement | null)?.value ?? '';
+    this.renderTab();
+    const input = document.getElementById('q-input') as HTMLInputElement | null;
+    if (input && val) input.value = val;
+    if (this.result) this.renderResult(this.result);
+  }
+
+  private bindChips(): void {
+    document.querySelectorAll('#q-tips .chip').forEach((c) =>
+      c.addEventListener('click', () => {
+        const ip = (c as HTMLElement).dataset.ip!;
+        const input = document.getElementById('q-input') as HTMLInputElement;
+        input.value = ip;
+        void this.onQuery(ip);
+      }));
+  }
+
+  private refreshChips(): void {
+    const host = document.getElementById('q-tips');
+    if (!host) return;
+    const recent = getHistory().slice(0, 5);
+    host.innerHTML = recent.map((h) =>
+      `<span class="chip" data-ip="${this.esc(h.result.ip)}">${this.esc(h.result.ip)}</span>`).join('');
+    host.style.display = recent.length ? 'flex' : 'none';
+    this.bindChips();
   }
 
   private async onQuery(raw: string): Promise<void> {
+    if (this.busy) return;
     const target = parseQueryTarget(raw);
-    if (target.kind === 'invalid') { this.toast('❌ 请输入合法的 IP 或域名'); return; }
-
-    const status = document.getElementById('q-status')!;
+    if (target.kind === 'invalid') { this.toast(this.tr.invalid); return; }
+    const status = document.getElementById('q-status');
+    if (!status) return;
+    const btn = document.getElementById('q-btn') as HTMLButtonElement | null;
     this.haptic();
-    this.loading = true;
+    this.busy = true;
+    if (btn) btn.disabled = true;
 
-    if (target.kind === 'private') {
-      this.currentResult = {
-        ip: target.value, country: '局域网 / 保留地址', isPrivate: true,
-        privateType: target.type, source: '本地识别', time: Date.now(),
-      };
-      addHistory(this.currentResult);
-      this.loading = false;
-      this.renderResult(this.currentResult);
-      this.refreshTipChips();
-      return;
-    }
-
-    status.innerHTML = `<div class="loading-box"><div class="spinner"></div>
-      ${target.kind === 'domain' ? `正在解析域名 ${this.esc(target.value)} …` : '正在查询，稍候…'}</div>`;
     try {
-      let ip = target.value;
-      if (target.kind === 'domain') {
-        status.innerHTML = `<div class="loading-box"><div class="spinner"></div>正在解析域名 ${this.esc(target.value)} …</div>`;
-        ip = await resolveDomain(target.value);
+      if (target.kind === 'private') {
+        this.result = {
+          ip: target.value, country: this.tr.privateNet, isPrivate: true,
+          privateType: target.type, source: 'Local', time: Date.now(),
+        };
+        addHistory(this.result);
+        this.renderResult(this.result);
+        this.refreshChips();
+        return;
       }
-      status.innerHTML = `<div class="loading-box"><div class="spinner"></div>正在查询 ${this.esc(ip)} 的归属地…</div>`;
-      const result = await queryIp(ip);
-      this.currentResult = result;
-      addHistory(result);
+      status.innerHTML = `<div class="loading"><div class="spinner"></div><div>${
+        target.kind === 'domain'
+          ? `${this.esc(this.tr.resolving)} ${this.esc(target.value)} …`
+          : `${this.esc(this.tr.querying)} ${this.esc(target.value)} …`
+      }</div></div>`;
+      let ip = target.value;
+      if (target.kind === 'domain') ip = await resolveDomain(target.value);
+      status.innerHTML = `<div class="loading"><div class="spinner"></div><div>${this.esc(this.tr.querying)} ${this.esc(ip)} …</div></div>`;
+      const r = await queryIp(ip, this.settings.source);
+      this.result = r;
+      addHistory(r);
       status.innerHTML = '';
-      this.renderResult(result);
-      this.refreshTipChips();
+      this.renderResult(r);
+      this.refreshChips();
     } catch (e) {
-      status.innerHTML = `<div class="error-box">❌ ${this.esc(e instanceof Error ? e.message : '查询失败，请检查网络')}</div>`;
+      status.innerHTML = `<div class="error">✕ ${this.esc(e instanceof Error ? e.message : this.tr.lookupFail)}</div>`;
     } finally {
-      this.loading = false;
+      this.busy = false;
+      if (btn) btn.disabled = false;
     }
   }
 
   private async onMyIp(): Promise<void> {
-    const btn = document.getElementById('btn-myip') as HTMLButtonElement;
-    btn.disabled = true;
+    const btn = document.getElementById('btn-myip') as HTMLButtonElement | null;
+    if (btn) btn.disabled = true;
     this.haptic();
     try {
       const ip = await getMyIp();
-      // 切到查询页并填入
-      this.currentTab = 'query';
+      this.tab = 'query';
       this.renderTabbar();
       this.renderTab();
       const input = document.getElementById('q-input') as HTMLInputElement | null;
       if (input) input.value = ip;
       await this.onQuery(ip);
     } catch (e) {
-      this.toast(`❌ ${e instanceof Error ? e.message : '获取失败'}`);
+      this.toast(`✕ ${e instanceof Error ? e.message : this.tr.lookupFail}`);
     } finally {
-      btn.disabled = false;
+      if (btn) btn.disabled = false;
     }
   }
 
-  private refreshTipChips(): void {
-    // 只刷新快捷 chips，不动输入框与结果
-    const tips = document.getElementById('q-tips');
-    if (!tips) return;
-    const history = getHistory().slice(0, 6);
-    tips.innerHTML = history
-      .map((h) => `<span class="tip-chip" data-ip="${this.esc(h.result.ip)}">${this.esc(h.result.ip)}</span>`)
-      .join('');
-    tips.querySelectorAll('.tip-chip').forEach((c) =>
-      c.addEventListener('click', () => {
-        const input = document.getElementById('q-input') as HTMLInputElement;
-        input.value = (c as HTMLElement).dataset.ip!;
-        this.onQuery(input.value);
-      })
-    );
+  /** 跳到查询页并查询（历史/收藏/批量点击复用） */
+  private gotoQuery(ip: string): void {
+    this.tab = 'query';
+    this.renderTabbar();
+    this.renderTab();
+    const input = document.getElementById('q-input') as HTMLInputElement | null;
+    if (input) input.value = ip;
+    void this.onQuery(ip);
   }
 
   private renderResult(r: IpResult): void {
-    const host = document.getElementById('q-status') ?? document.getElementById('tab-content')!;
+    const host = document.getElementById('q-status');
+    if (!host) return;
+    const tr = this.tr;
     const fav = isFav(r.ip);
     const rows: Array<[string, string | undefined]> = [
-      ['归属地', locationText(r) || '未知'],
-      ['国家/地区', r.country],
-      ['省 / 州', r.region],
-      ['城市', r.city],
-      ['区县', r.district],
-      ['运营商', r.isp],
-      ['ASN', r.asn],
-      ['组织', r.org],
-      ['经纬度', r.lat != null && r.lon != null ? `${r.lat}, ${r.lon}` : undefined],
-      ['时区', r.timezone],
-      ['邮编', r.zipcode],
-      ['数据源', r.source],
-      ['查询时间', fmtTime(r.time)],
+      [tr.fieldLocation, locationText(r) || (r.isPrivate ? tr.noGeo : tr.unknown)],
+      [tr.fieldCountry, r.country],
+      [tr.fieldRegion, r.region],
+      [tr.fieldCity, r.city],
+      [tr.fieldDistrict, r.district],
+      [tr.fieldIsp, r.isp],
+      [tr.fieldAsn, r.asn],
+      [tr.fieldOrg, r.org],
+      [tr.fieldCoords, r.lat != null && r.lon != null ? `${r.lat}, ${r.lon}` : undefined],
+      [tr.fieldTimezone, r.timezone],
+      [tr.fieldZip, r.zipcode],
+      [tr.fieldSource, r.source],
+      [tr.fieldTime, fmtTime(r.time)],
     ];
-    if (r.isPrivate) rows.unshift(['地址类型', r.privateType ?? '内网地址']);
+    if (r.isPrivate) rows.unshift([tr.fieldType, r.privateType ?? tr.privateNet]);
+
     host.innerHTML = `
-      <div class="result-card">
-        <div class="result-head">
-          <div class="result-flag">${r.isPrivate ? '🏠' : flagEmoji(r.countryCode)}</div>
-          <div class="result-ip-block">
+      <section class="panel fade-up">
+        <div class="result-hero">
+          <div class="flag">${r.isPrivate ? '⌂' : flagEmoji(r.countryCode)}</div>
+          <div class="result-main">
             <div class="result-ip">${this.esc(r.ip)}</div>
-            <div class="result-loc">${this.esc(locationText(r) || (r.isPrivate ? '局域网地址，无公网归属地' : '未知'))}</div>
+            <div class="result-loc">${this.esc(locationText(r) || (r.isPrivate ? tr.noGeo : tr.unknown))}</div>
           </div>
-          <span class="result-badge ${r.isPrivate ? 'private' : ''}">${r.isPrivate ? '内网' : (r.countryCode ? this.esc(r.countryCode) : 'IP')}</span>
+          <span class="badge ${r.isPrivate ? 'private' : ''}">${r.isPrivate ? this.esc(tr.privateTag) : (r.countryCode ? this.esc(r.countryCode) : 'IP')}</span>
         </div>
-        <div class="detail-list">
+        <div class="rows">
           ${rows.filter(([, v]) => v != null && v !== '').map(([k, v]) => `
-            <div class="detail-row">
-              <div class="detail-label">${k}</div>
-              <div class="detail-value"><span>${this.esc(v)}</span>
-                <span class="copy-icon" data-copy="${this.esc(v)}" title="复制">📋</span>
-              </div>
+            <div class="row">
+              <span class="row-k">${this.esc(k)}</span>
+              <span class="row-v"><span>${this.esc(v)}</span><span class="copy-ic" data-copy="${this.esc(v)}">⧉</span></span>
             </div>`).join('')}
         </div>
         <div class="result-actions">
-          <button class="btn-mini" id="r-copy">📋 复制结果</button>
-          <button class="btn-mini" id="r-share">📤 分享</button>
-          <button class="btn-mini ${fav ? 'warn' : ''}" id="r-fav">${fav ? '⭐ 已收藏' : '☆ 收藏'}</button>
+          <button class="act" id="r-copy">⧉ ${this.esc(tr.copyResult)}</button>
+          <button class="act" id="r-share">↗ ${this.esc(tr.share)}</button>
+          <button class="act ${fav ? 'on' : ''}" id="r-fav">${fav ? '★' : '☆'} ${this.esc(fav ? tr.starred : tr.star)}</button>
           ${r.lat != null && r.lon != null ? `
-            <button class="btn-mini" id="r-map-amap">🗺️ 高德地图</button>
-            <button class="btn-mini" id="r-map-g">🌍 Google 地图</button>` : ''}
+            <button class="act" id="r-amap">🗺 ${this.esc(tr.amap)}</button>
+            <button class="act" id="r-g">🌐 ${this.esc(tr.gmap)}</button>` : ''}
         </div>
-      </div>`;
-    host.querySelectorAll('.copy-icon').forEach((c) =>
+      </section>`;
+
+    host.querySelectorAll('.copy-ic').forEach((c) =>
       c.addEventListener('click', async () => {
         const ok = await copyText((c as HTMLElement).dataset.copy!);
-        this.toast(ok ? '✅ 已复制' : '❌ 复制失败');
-      })
-    );
-    document.getElementById('r-copy')?.addEventListener('click', async () => {
+        this.toast(ok ? tr.copied : tr.copyFail);
+      }));
+    host.querySelector('#r-copy')?.addEventListener('click', async () => {
       const ok = await copyText(this.resultText(r));
-      this.toast(ok ? '✅ 已复制结果' : '❌ 复制失败');
+      this.toast(ok ? tr.copied : tr.copyFail);
     });
-    document.getElementById('r-share')?.addEventListener('click', async () => {
+    host.querySelector('#r-share')?.addEventListener('click', async () => {
       const ok = await shareText(this.resultText(r));
-      if (!ok) { await copyText(this.resultText(r)); this.toast('已复制，可粘贴分享'); }
+      if (!ok) { await copyText(this.resultText(r)); this.toast(tr.sharedTip); }
     });
-    document.getElementById('r-fav')?.addEventListener('click', () => {
+    host.querySelector('#r-fav')?.addEventListener('click', () => {
       const { fav: now } = toggleFav(r);
       this.haptic();
-      this.toast(now ? '⭐ 已加入收藏' : '已取消收藏');
+      this.toast(now ? tr.starred : tr.unstarred);
       this.renderResult(r);
     });
-    document.getElementById('r-map-amap')?.addEventListener('click', () =>
+    host.querySelector('#r-amap')?.addEventListener('click', () =>
       window.open(`https://uri.amap.com/marker?position=${r.lon},${r.lat}&name=${encodeURIComponent(r.ip)}&src=ipgeo`, '_blank'));
-    document.getElementById('r-map-g')?.addEventListener('click', () =>
+    host.querySelector('#r-g')?.addEventListener('click', () =>
       window.open(`https://www.google.com/maps?q=${r.lat},${r.lon}`, '_blank'));
   }
 
   private resultText(r: IpResult): string {
-    const lines = [
-      `IP：${r.ip}`,
-      `归属地：${locationText(r) || (r.isPrivate ? '局域网地址' : '未知')}`,
-      r.isp && `运营商：${r.isp}`,
-      r.asn && `ASN：${r.asn}`,
-      r.lat != null && `经纬度：${r.lat}, ${r.lon}`,
-      r.timezone && `时区：${r.timezone}`,
-      `数据源：${r.source}`,
-      `—— IP 归属地查询`,
-    ];
-    return lines.filter(Boolean).join('\n');
+    const tr = this.tr;
+    return [
+      `IP: ${r.ip}`,
+      `${tr.fieldLocation}: ${locationText(r) || (r.isPrivate ? tr.noGeo : tr.unknown)}`,
+      r.isp && `${tr.fieldIsp}: ${r.isp}`,
+      r.asn && `${tr.fieldAsn}: ${r.asn}`,
+      r.lat != null && r.lon != null && `${tr.fieldCoords}: ${r.lat}, ${r.lon}`,
+      r.timezone && `${tr.fieldTimezone}: ${r.timezone}`,
+      `${tr.fieldSource}: ${r.source}`,
+      '—— IP·GEO',
+    ].filter(Boolean).join('\n');
   }
 
   /* ================= Tab：批量 ================= */
 
   private renderBatchTab(main: HTMLElement): void {
     main.innerHTML = `
-      <div class="search-box">
-        <textarea class="batch-textarea" id="b-input"
-          placeholder="每行一个 IP 或域名，例如：&#10;8.8.8.8&#10;baidu.com&#10;114.114.114.114&#10;2400:3200::1"></textarea>
-        <div style="display:flex;gap:10px;margin-top:10px;">
-          <button class="btn btn-primary" id="b-btn" style="flex:1;">🚀 开始批量查询</button>
-          <button class="btn btn-ghost" id="b-clear">清空</button>
+      <section class="panel">
+        <textarea id="b-input" class="batch-area mono" placeholder="8.8.8.8&#10;qq.com&#10;114.114.114.114"></textarea>
+        <div class="hint">${this.esc(this.tr.batchHint)}</div>
+        <div class="search-row batch-actions">
+          <button id="b-btn" class="btn-primary" style="flex:1">${this.esc(this.tr.batchStart)}</button>
+          <button id="b-clear" class="act">${this.esc(this.tr.clear)}</button>
         </div>
-        <div class="batch-progress" id="b-prog" style="display:none;"><div class="bar" id="b-bar"></div></div>
-        <div class="batch-stats" id="b-stats"></div>
-      </div>
-      <div class="section-title">查询结果 <span class="count" id="b-count"></span>
+        <div class="progress" id="b-prog" style="display:none"><div class="bar" id="b-bar"></div></div>
+      </section>
+      <div class="list-head">
+        <span class="list-title mono" id="b-count">${this.batch.length} / ${this.batchTotal}</span>
         <span class="grow"></span>
-        <button class="btn-mini" id="b-export" style="display:none;">📋 复制全部</button>
+        <button class="act" id="b-export" style="display:${this.batch.length ? '' : 'none'}">⧉ ${this.esc(this.tr.copyAll)}</button>
       </div>
-      <div class="record-list" id="b-list"></div>
+      <section class="panel" id="b-list"></section>
     `;
-    document.getElementById('b-btn')!.addEventListener('click', () => this.onBatch());
-    document.getElementById('b-clear')!.addEventListener('click', () => {
+    main.querySelector('#b-btn')!.addEventListener('click', () => void this.onBatch());
+    main.querySelector('#b-clear')!.addEventListener('click', () => {
       (document.getElementById('b-input') as HTMLTextAreaElement).value = '';
-      this.batchResults = [];
-      this.renderBatchList();
-      this.toast('已清空');
+      this.batch = [];
+      this.batchTotal = 0;
+      this.batchDone = 0;
+      this.renderTab();
     });
-    document.getElementById('b-export')!.addEventListener('click', async () => {
-      const text = this.batchResults
-        .map((r) => `${r.ip}\t${locationText(r) || (r.isPrivate ? '内网' : '查询失败')}`)
+    main.querySelector('#b-export')!.addEventListener('click', async () => {
+      const text = this.batch
+        .map((r) => `${r.ip}\t${locationText(r) || (r.isPrivate ? this.tr.privateTag : this.tr.lookupFail)}`)
         .join('\n');
       const ok = await copyText(text);
-      this.toast(ok ? '✅ 已复制全部结果' : '❌ 复制失败');
+      this.toast(ok ? this.tr.copied : this.tr.copyFail);
     });
     this.renderBatchList();
   }
 
   private async onBatch(): Promise<void> {
-    const input = document.getElementById('b-input') as HTMLTextAreaElement;
+    const input = document.getElementById('b-input') as HTMLTextAreaElement | null;
+    if (!input) return;
     const lines = input.value.split(/\n+/).map((s) => s.trim()).filter(Boolean);
-    if (!lines.length) { this.toast('请先输入要查询的 IP / 域名'); return; }
-    if (lines.length > 200) { this.toast('单次最多 200 条'); return; }
-
+    if (!lines.length) { this.toast(this.tr.batchEmpty); return; }
+    if (lines.length > 200) { this.toast(this.tr.batchMax); return; }
     this.haptic();
-    this.batchResults = [];
+    this.batch = [];
     this.batchTotal = lines.length;
     this.batchDone = 0;
     const prog = document.getElementById('b-prog')!;
-    prog.style.display = 'block';
     const bar = document.getElementById('b-bar') as HTMLElement;
+    prog.style.display = 'block';
+    bar.style.width = '0%';
 
-    // 3 并发依次查询，兼顾速度与接口压力
+    // 3 并发依次查询，兼顾速度与接口压力（遵循当前选中的数据源）
     const queue = [...lines];
-    const worker = async () => {
+    const worker = async (): Promise<void> => {
       while (queue.length) {
         const line = queue.shift()!;
-        let result: IpResult | null = null;
+        let r: IpResult | null = null;
         try {
           const target = parseQueryTarget(line);
           if (target.kind === 'invalid') {
-            result = { ip: line, country: '格式错误', source: '-', time: Date.now() };
+            r = { ip: line, country: this.tr.fmtError, source: '-', time: Date.now() };
           } else if (target.kind === 'private') {
-            result = { ip: target.value, country: '局域网 / 保留地址', isPrivate: true, privateType: target.type, source: '本地识别', time: Date.now() };
+            r = { ip: target.value, country: this.tr.privateNet, isPrivate: true, privateType: target.type, source: 'Local', time: Date.now() };
           } else {
             const ip = target.kind === 'domain' ? await resolveDomain(target.value) : target.value;
-            result = await queryIp(ip);
+            r = await queryIp(ip, this.settings.source);
           }
         } catch {
-          result = { ip: line, country: '查询失败', source: '-', time: Date.now() };
+          r = { ip: line, country: this.tr.lookupFail, source: '-', time: Date.now() };
         }
-        this.batchResults.push(result);
+        this.batch.push(r);
         this.batchDone++;
-        bar.style.width = `${(this.batchDone / this.batchTotal) * 100}%`;
+        bar.style.width = `${Math.round((this.batchDone / this.batchTotal) * 100)}%`;
         this.renderBatchList();
       }
     };
     await Promise.all([worker(), worker(), worker()]);
     prog.style.display = 'none';
-    this.toast(`✅ 批量查询完成（${this.batchTotal} 条）`);
+    this.toast(`${this.tr.batchDone} · ${this.batchTotal}`);
   }
 
   private renderBatchList(): void {
     const list = document.getElementById('b-list');
-    const count = document.getElementById('b-count');
-    const exportBtn = document.getElementById('b-export');
     if (!list) return;
-    if (count) count.textContent = this.batchResults.length ? `${this.batchResults.length} 条` : '';
-    if (exportBtn) exportBtn.style.display = this.batchResults.length ? '' : 'none';
-    list.innerHTML = this.batchResults.map((r) => `
-      <div class="record-item" data-ip="${this.esc(r.ip)}">
-        <div class="record-main">
-          <div class="record-ip">${r.isPrivate ? '🏠' : flagEmoji(r.countryCode)} ${this.esc(r.ip)}</div>
-          <div class="record-sub">${this.esc(locationText(r) || '—')}</div>
-        </div>
-        <span class="record-time">${this.esc(r.isp ?? r.source ?? '')}</span>
-      </div>`).join('');
-    list.querySelectorAll('.record-item').forEach((it) =>
-      it.addEventListener('click', () => {
-        this.currentTab = 'query';
-        this.renderTabbar();
-        this.renderTab();
-        const input = document.getElementById('q-input') as HTMLInputElement;
-        input.value = (it as HTMLElement).dataset.ip!;
-        this.onQuery(input.value);
-      })
-    );
+    const count = document.getElementById('b-count');
+    if (count) count.textContent = `${this.batch.length} / ${this.batchTotal}`;
+    const exportBtn = document.getElementById('b-export');
+    if (exportBtn) exportBtn.style.display = this.batch.length ? '' : 'none';
+    list.innerHTML = this.batch.length
+      ? this.batch.map((r) => `
+        <div class="rec" data-ip="${this.esc(r.ip)}">
+          <div class="rec-main">
+            <div class="rec-ip">${r.isPrivate ? '⌂' : flagEmoji(r.countryCode)} ${this.esc(r.ip)}</div>
+            <div class="rec-sub">${this.esc(locationText(r) || '—')}</div>
+          </div>
+          <span class="rec-time">${this.esc(r.isp ?? r.source ?? '')}</span>
+        </div>`).join('')
+      : `<div class="empty"><div class="glyph">☰</div>${this.esc(this.tr.batchEmpty)}</div>`;
+    list.querySelectorAll('.rec').forEach((it) =>
+      it.addEventListener('click', () => this.gotoQuery((it as HTMLElement).dataset.ip!)));
   }
 
   /* ================= Tab：历史 ================= */
 
   private renderHistoryTab(main: HTMLElement): void {
-    const history = getHistory();
+    const h = getHistory();
     main.innerHTML = `
-      <div class="section-title">🕘 查询历史
-        <span class="count">${history.length} 条（最多保留 100 条）</span>
+      <div class="list-head">
+        <span class="list-title">${this.esc(this.tr.historyTitle)}</span>
+        <span class="list-sub">${h.length} ${this.esc(this.tr.historyCap)}</span>
         <span class="grow"></span>
-        ${history.length ? '<button class="btn-mini danger" id="h-clear">🗑️ 清空</button>' : ''}
+        ${h.length ? `<button class="act" id="h-clear">${this.esc(this.tr.clear)}</button>` : ''}
       </div>
-      <div class="record-list" id="h-list"></div>
+      <section class="panel" id="h-list"></section>
     `;
-    const list = document.getElementById('h-list')!;
-    if (!history.length) {
-      list.innerHTML = `<div class="empty-box"><div class="big">🗂️</div>暂无查询记录</div>`;
+    const list = main.querySelector('#h-list') as HTMLElement;
+    if (!h.length) {
+      list.innerHTML = `<div class="empty"><div class="glyph">◷</div>${this.esc(this.tr.emptyHistory)}</div>`;
     } else {
-      list.innerHTML = history.map((h) => this.recordItemHtml(h)).join('');
-      this.bindRecordItems(list, 'h', removeHistory);
+      list.innerHTML = h.map((it) => this.recHtml(it)).join('');
+      this.bindRecList(list, removeHistory);
     }
-    document.getElementById('h-clear')?.addEventListener('click', () => {
+    main.querySelector('#h-clear')?.addEventListener('click', () => {
       clearHistory();
-      this.toast('历史已清空');
+      this.toast(this.tr.cleared);
       this.renderTab();
     });
   }
@@ -446,131 +514,133 @@ export class App {
   private renderFavsTab(main: HTMLElement): void {
     const favs = getFavs();
     main.innerHTML = `
-      <div class="section-title">⭐ 我的收藏
-        <span class="count">${favs.length} 条</span>
+      <div class="list-head">
+        <span class="list-title">${this.esc(this.tr.favTitle)}</span>
+        <span class="list-sub">${favs.length}</span>
         <span class="grow"></span>
-        ${favs.length ? '<button class="btn-mini danger" id="f-clear">🗑️ 清空</button>' : ''}
+        ${favs.length ? `<button class="act" id="f-clear">${this.esc(this.tr.clear)}</button>` : ''}
       </div>
-      <div class="record-list" id="f-list"></div>
+      <section class="panel" id="f-list"></section>
     `;
-    const list = document.getElementById('f-list')!;
+    const list = main.querySelector('#f-list') as HTMLElement;
     if (!favs.length) {
-      list.innerHTML = `<div class="empty-box"><div class="big">⭐</div>还没有收藏<br>查询结果页点击「☆ 收藏」即可加入</div>`;
+      list.innerHTML = `<div class="empty"><div class="glyph">★</div>${this.esc(this.tr.emptyFav)}<br>${this.esc(this.tr.emptyFavSub)}</div>`;
     } else {
-      list.innerHTML = favs.map((h) => this.recordItemHtml(h)).join('');
-      this.bindRecordItems(list, 'f', removeFav);
+      list.innerHTML = favs.map((it) => this.recHtml(it)).join('');
+      this.bindRecList(list, removeFav);
     }
-    document.getElementById('f-clear')?.addEventListener('click', () => {
+    main.querySelector('#f-clear')?.addEventListener('click', () => {
       clearFavs();
-      this.toast('收藏已清空');
+      this.toast(this.tr.cleared);
       this.renderTab();
     });
   }
 
-  private recordItemHtml(it: RecordItem): string {
+  private recHtml(it: RecordItem): string {
     const r = it.result;
     return `
-      <div class="record-item" data-ip="${this.esc(r.ip)}">
-        <div class="record-main">
-          <div class="record-ip">${r.isPrivate ? '🏠' : flagEmoji(r.countryCode)} ${this.esc(r.ip)}</div>
-          <div class="record-sub">${this.esc(locationText(r) || (r.isPrivate ? r.privateType ?? '内网地址' : '未知'))}</div>
+      <div class="rec" data-ip="${this.esc(r.ip)}">
+        <div class="rec-main">
+          <div class="rec-ip">${r.isPrivate ? '⌂' : flagEmoji(r.countryCode)} ${this.esc(r.ip)}</div>
+          <div class="rec-sub">${this.esc(locationText(r) || (r.isPrivate ? (r.privateType ?? this.tr.privateNet) : this.tr.unknown))}</div>
         </div>
-        <span class="record-time">${fmtTime(r.time)}</span>
-        <button class="record-del" data-del="${this.esc(r.ip)}" title="删除">✕</button>
+        <span class="rec-time">${fmtTime(r.time)}</span>
+        <button class="rec-del" data-del="${this.esc(r.ip)}">✕</button>
       </div>`;
   }
 
-  /** 绑定记录列表：点卡片→查详情，点删除→移除 */
-  private bindRecordItems(
-    list: HTMLElement,
-    prefix: string,
-    removeFn: (ip: string) => RecordItem[]
-  ): void {
-    list.querySelectorAll('.record-del').forEach((b) =>
+  /** 绑定记录列表：点行→查详情，点删除→移除 */
+  private bindRecList(list: HTMLElement, removeFn: (ip: string) => RecordItem[]): void {
+    list.querySelectorAll('.rec-del').forEach((b) =>
       b.addEventListener('click', (e) => {
         e.stopPropagation();
-        const ip = (b as HTMLElement).dataset.del!;
-        removeFn(ip);
-        this.toast('已删除');
+        removeFn((b as HTMLElement).dataset.del!);
+        this.toast(this.tr.deleted);
         this.renderTab();
-      })
-    );
-    list.querySelectorAll('.record-item').forEach((it) =>
-      it.addEventListener('click', () => {
-        this.currentTab = 'query';
-        this.renderTabbar();
-        this.renderTab();
-        const input = document.getElementById('q-input') as HTMLInputElement;
-        input.value = (it as HTMLElement).dataset.ip!;
-        this.onQuery(input.value);
-      })
-    );
-    void prefix;
+      }));
+    list.querySelectorAll('.rec').forEach((it) =>
+      it.addEventListener('click', () => this.gotoQuery((it as HTMLElement).dataset.ip!)));
   }
 
   /* ================= Tab：设置 ================= */
 
   private renderSettingsTab(main: HTMLElement): void {
+    const tr = this.tr;
     main.innerHTML = `
-      <div class="section-title">⚙️ 设置</div>
-      <div class="settings-card">
-        <div class="setting-row">
-          <div class="setting-label">外观主题
-            <div class="setting-sub">跟随系统或手动指定</div>
-          </div>
-          <div class="seg" id="s-theme">
-            <button data-v="auto" class="${this.settings.theme === 'auto' ? 'on' : ''}">自动</button>
-            <button data-v="light" class="${this.settings.theme === 'light' ? 'on' : ''}">浅色</button>
-            <button data-v="dark" class="${this.settings.theme === 'dark' ? 'on' : ''}">深色</button>
+      <div class="list-head"><span class="list-title">${this.esc(tr.tabSettings)}</span></div>
+      <section class="panel">
+        <div class="set-row">
+          <div class="set-main"><div class="set-label">${this.esc(tr.language)}</div></div>
+          <div class="seg-sm" id="s-lang">
+            <button data-v="zh" class="${this.settings.lang === 'zh' ? 'on' : ''}">中文</button>
+            <button data-v="en" class="${this.settings.lang === 'en' ? 'on' : ''}">EN</button>
           </div>
         </div>
-        <div class="setting-row">
-          <div class="setting-label">震动反馈
-            <div class="setting-sub">操作时轻微震动</div>
+        <div class="set-row">
+          <div class="set-main"><div class="set-label">${this.esc(tr.appearance)}</div></div>
+          <div class="seg-sm" id="s-theme">
+            <button data-v="auto" class="${this.settings.theme === 'auto' ? 'on' : ''}">${this.esc(tr.themeAuto)}</button>
+            <button data-v="light" class="${this.settings.theme === 'light' ? 'on' : ''}">${this.esc(tr.themeLight)}</button>
+            <button data-v="dark" class="${this.settings.theme === 'dark' ? 'on' : ''}">${this.esc(tr.themeDark)}</button>
           </div>
+        </div>
+        <div class="set-row">
+          <div class="set-main"><div class="set-label">${this.esc(tr.haptics)}</div><div class="set-sub">${this.esc(tr.hapticsSub)}</div></div>
           <button class="toggle ${this.settings.haptics ? 'on' : ''}" id="s-haptics"></button>
         </div>
-        <div class="setting-row" id="s-data">
-          <div class="setting-label">数据管理
-            <div class="setting-sub">清空历史与收藏</div>
-          </div>
-          <button class="btn-mini danger" id="s-clear-all">🗑️ 清空数据</button>
+        <div class="set-row">
+          <div class="set-main"><div class="set-label">${this.esc(tr.dataMgmt)}</div><div class="set-sub">${this.esc(tr.dataSub)}</div></div>
+          <button class="act" id="s-clear">🗑 ${this.esc(tr.clearData)}</button>
         </div>
-      </div>
+      </section>
 
-      <div class="section-title">🌐 数据源（自动容错切换）</div>
-      <div class="settings-card">
-        <div class="setting-row"><div class="setting-label">① vore.top<div class="setting-sub">国内 · HTTPS · 中文含运营商</div></div></div>
-        <div class="setting-row"><div class="setting-label">② ip-api.com<div class="setting-sub">国际 · 中文输出 · 字段全</div></div></div>
-        <div class="setting-row"><div class="setting-label">③ ipwho.is<div class="setting-sub">国际 · HTTPS · 经纬度/ASN</div></div></div>
-        <div class="setting-row"><div class="setting-label">④ ipapi.co<div class="setting-sub">国际 · 兜底</div></div></div>
+      <div class="list-head">
+        <span class="list-title">${this.esc(tr.sourcesTitle)}</span>
+        <span class="list-sub">${this.esc(this.settings.source === 'auto'
+          ? tr.auto
+          : SOURCE_META.find((s) => s.id === this.settings.source)?.name ?? '')}</span>
       </div>
-
-      <div class="about-box">
-        IP 归属地查询 v1.0.0<br>
-        支持查询 IPv4 / IPv6 / 域名 · 内网识别 · 批量查询 · 历史收藏<br>
-        Capacitor + Vite · 数据仅供参考
-      </div>
+      <section class="panel">
+        <div class="hint">${this.esc(tr.sourcesNote)}</div>
+        <div class="set-row">
+          <div class="set-main"><div class="set-label">${this.esc(tr.auto)}</div><div class="set-sub">${this.esc(tr.autoSub)}</div></div>
+          ${this.settings.source === 'auto' ? `<span class="badge">${this.esc(tr.current)}</span>` : ''}
+        </div>
+        ${SOURCE_META.map((s) => `
+          <div class="set-row">
+            <div class="set-main"><div class="set-label">${s.name}</div><div class="set-sub">${this.esc(tr[SRC_KEY[s.id]])}</div></div>
+            ${this.settings.source === s.id ? `<span class="badge">${this.esc(tr.current)}</span>` : ''}
+          </div>`).join('')}
+      </section>
+      <div class="about">${this.esc(tr.about)}</div>
     `;
-    document.getElementById('s-theme')!.querySelectorAll('button').forEach((b) =>
+    main.querySelectorAll('#s-lang button').forEach((b) =>
+      b.addEventListener('click', () => {
+        this.settings.lang = (b as HTMLElement).dataset.v as AppSettings['lang'];
+        saveSettings(this.settings);
+        this.haptic();
+        this.render();
+      }));
+    main.querySelectorAll('#s-theme button').forEach((b) =>
       b.addEventListener('click', () => {
         this.settings.theme = (b as HTMLElement).dataset.v as AppSettings['theme'];
         saveSettings(this.settings);
         this.applyTheme();
         this.haptic();
+        this.renderHeader();
         this.renderTab();
-      })
-    );
-    document.getElementById('s-haptics')!.addEventListener('click', () => {
+      }));
+    main.querySelector('#s-haptics')!.addEventListener('click', () => {
       this.settings.haptics = !this.settings.haptics;
       saveSettings(this.settings);
       this.haptic();
       this.renderTab();
     });
-    document.getElementById('s-clear-all')!.addEventListener('click', () => {
+    main.querySelector('#s-clear')!.addEventListener('click', () => {
       clearHistory();
       clearFavs();
-      this.toast('已清空全部历史与收藏');
+      this.result = null;
+      this.toast(this.tr.cleared);
       this.renderTab();
     });
   }

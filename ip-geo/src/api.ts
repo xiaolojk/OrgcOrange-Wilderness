@@ -1,7 +1,7 @@
-import type { IpResult } from './types';
+import type { IpResult, QuerySource, SourceId } from './types';
 import { countryNameZh } from './ipUtils';
 
-/* ================= 多数据源 IP 归属地查询（自动容错） ================= */
+/* ================= 多数据源 IP 归属地查询（用户可选源 / 自动容错） ================= */
 
 /** 带超时的 fetch（Capacitor 原生运行时下走 CapacitorHttp，无 CORS 限制） */
 async function fetchJSON(url: string, timeoutMs = 6000): Promise<any> {
@@ -16,15 +16,16 @@ async function fetchJSON(url: string, timeoutMs = 6000): Promise<any> {
   }
 }
 
-/** 拼接归属地字段（处理部分源字符串里带空格的情况） */
+/** 清洗字段：去掉空值 / 占位符 */
 function clean(s?: string | null): string | undefined {
   if (s == null) return undefined;
   const t = String(s).trim();
   return t && t !== 'N/A' && t !== 'null' && t !== 'undefined' ? t : undefined;
 }
 
-/** 各数据源的查询与解析逻辑（全部 UTF-8 编码，避免中文乱码） */
+/** 数据源定义（全部 UTF-8 编码，避免中文乱码） */
 interface Source {
+  id: SourceId;
   name: string;
   query: (ip: string) => Promise<IpResult>;
 }
@@ -32,6 +33,7 @@ interface Source {
 const SOURCES: Source[] = [
   {
     // vore.top（国内、HTTPS、UTF-8 中文、含运营商）
+    id: 'vore',
     name: 'vore.top',
     async query(ip) {
       const d = await fetchJSON(`https://api.vore.top/api/IPdata?ip=${encodeURIComponent(ip)}`);
@@ -55,6 +57,7 @@ const SOURCES: Source[] = [
   },
   {
     // ip-api.com（国际、UTF-8 中文输出、字段全）
+    id: 'ipapi',
     name: 'ip-api.com',
     async query(ip) {
       const d = await fetchJSON(
@@ -82,6 +85,7 @@ const SOURCES: Source[] = [
   },
   {
     // ipwho.is（国际、HTTPS、CORS 友好，经纬度/ASN 全）
+    id: 'ipwho',
     name: 'ipwho.is',
     async query(ip) {
       const d = await fetchJSON(`https://ipwho.is/${encodeURIComponent(ip)}`);
@@ -106,6 +110,7 @@ const SOURCES: Source[] = [
   },
   {
     // ipapi.co（国际兜底，UTF-8）
+    id: 'ipapico',
     name: 'ipapi.co',
     async query(ip) {
       const d = await fetchJSON(`https://ipapi.co/${encodeURIComponent(ip)}/json/`);
@@ -129,8 +134,19 @@ const SOURCES: Source[] = [
   },
 ];
 
-/** 依序尝试所有数据源，直到成功 */
-export async function queryIp(ip: string): Promise<IpResult> {
+/** 供 UI 渲染的源元数据 */
+export const SOURCE_META: ReadonlyArray<{ id: SourceId; name: string }> =
+  SOURCES.map((s) => ({ id: s.id, name: s.name }));
+
+/**
+ * 查询 IP 归属地
+ * @param source 'auto' 走容错链；指定源 id 则只用该源查询
+ */
+export async function queryIp(ip: string, source: QuerySource = 'auto'): Promise<IpResult> {
+  if (source !== 'auto') {
+    const src = SOURCES.find((s) => s.id === source);
+    if (src) return src.query(ip);
+  }
   let lastErr: unknown = null;
   for (const src of SOURCES) {
     try {

@@ -4,7 +4,7 @@ import type { AppSettings, IpResult, RecordItem } from './types';
 
 const K_HISTORY = 'ipgeo.history.v1';
 const K_FAVS = 'ipgeo.favs.v1';
-const K_SETTINGS = 'ipgeo.settings.v1';
+const K_SETTINGS = 'ipgeo.settings.v2';
 const MAX_HISTORY = 100;
 
 function read<T>(key: string, fallback: T): T {
@@ -82,7 +82,7 @@ export function clearFavs(): void {
 
 /* ---------- 设置 ---------- */
 
-const DEFAULT_SETTINGS: AppSettings = { theme: 'auto', haptics: true };
+const DEFAULT_SETTINGS: AppSettings = { theme: 'auto', haptics: true, lang: 'zh', source: 'auto' };
 
 export function getSettings(): AppSettings {
   return { ...DEFAULT_SETTINGS, ...read<Partial<AppSettings>>(K_SETTINGS, {}) };
