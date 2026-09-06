@@ -23,7 +23,7 @@ function clean(s?: string | null): string | undefined {
   return t && t !== 'N/A' && t !== 'null' && t !== 'undefined' ? t : undefined;
 }
 
-/** 各数据源的查询与解析逻辑 */
+/** 各数据源的查询与解析逻辑（全部 UTF-8 编码，避免中文乱码） */
 interface Source {
   name: string;
   query: (ip: string) => Promise<IpResult>;
@@ -31,47 +31,30 @@ interface Source {
 
 const SOURCES: Source[] = [
   {
-    // 太平洋电脑网（国内快、中文、含运营商）
-    name: '太平洋网络',
+    // vore.top（国内、HTTPS、UTF-8 中文、含运营商）
+    name: 'vore.top',
     async query(ip) {
-      const d = await fetchJSON(`https://whois.pconline.com.cn/ipJson.jsp?ip=${encodeURIComponent(ip)}&json=true`);
-      const country = clean(d.country) ?? '';
-      const region = clean(d.pro) ?? '';
-      const city = clean(d.city) ?? '';
-      const isp = clean(d.isp) ?? (clean(d.addr) ?? '').split(/\s+/).slice(-1)[0];
-      if (!country && !region && !city) throw new Error('空结果');
-      return {
-        ip, country: country || '未知', region, city, isp,
-        source: this.name, time: Date.now(),
-      };
-    },
-  },
-  {
-    // ipwho.is（国际、HTTPS、CORS 友好，浏览器兜底首选）
-    name: 'ipwho.is',
-    async query(ip) {
-      const d = await fetchJSON(`https://ipwho.is/${encodeURIComponent(ip)}`);
-      if (d.success === false) throw new Error(d.message || '查询失败');
+      const d = await fetchJSON(`https://api.vore.top/api/IPdata?ip=${encodeURIComponent(ip)}`);
+      if (d.code !== 200 || !d.ipdata) throw new Error(d.msg || '查询失败');
+      const info1 = clean(d.ipdata.info1);
+      const info2 = clean(d.ipdata.info2);
+      const info3 = clean(d.ipdata.info3);
+      const isp = clean(d.ipdata.isp);
+      const isCn = d.ipinfo?.cnip === true;
       return {
         ip,
-        country: countryNameZh(d.country_code, clean(d.country) ?? ''),
-        countryCode: clean(d.country_code),
-        region: clean(d.region),
-        city: clean(d.city),
-        isp: clean(d.connection?.isp) ?? clean(d.connection?.org),
-        asn: clean(d.connection?.asn) ? `AS${d.connection.asn}` : undefined,
-        org: clean(d.connection?.org),
-        lat: typeof d.latitude === 'number' ? d.latitude : undefined,
-        lon: typeof d.longitude === 'number' ? d.longitude : undefined,
-        timezone: clean(d.timezone?.id) ?? clean(d.timezone?.utc),
-        zipcode: clean(d.postal),
+        country: isCn ? '中国' : (info1 ?? '未知'),
+        region: isCn ? info1 : info2,
+        city: isCn ? info2 : info3,
+        district: isCn ? info3 : undefined,
+        isp,
         source: this.name,
         time: Date.now(),
       };
     },
   },
   {
-    // ip-api.com（国际、中文输出）
+    // ip-api.com（国际、UTF-8 中文输出、字段全）
     name: 'ip-api.com',
     async query(ip) {
       const d = await fetchJSON(
@@ -98,40 +81,31 @@ const SOURCES: Source[] = [
     },
   },
   {
-    // 百度开放数据（国内）
-    name: '百度开放数据',
+    // ipwho.is（国际、HTTPS、CORS 友好，经纬度/ASN 全）
+    name: 'ipwho.is',
     async query(ip) {
-      const d = await fetchJSON(
-        `https://opendata.baidu.com/api.php?query=${encodeURIComponent(ip)}&co=&resource_id=6006&format=json`
-      );
-      const loc = clean(d?.data?.[0]?.location);
-      if (!loc) throw new Error('空结果');
-      // location 形如 "中国广东深圳 电信"，切分运营商
-      const m = /^(.*?)\s*((?:电信|联通|移动|铁通|鹏博士|长城|教育网|谷歌|微软|亚马逊|阿里云|腾讯云|华为云).*)?$/.exec(loc);
-      const place = (m?.[1] ?? loc).trim();
-      const isp = m?.[2]?.trim();
-      return { ip, country: place, isp, source: this.name, time: Date.now() };
-    },
-  },
-  {
-    // useragentinfo（国内）
-    name: 'UserAgentInfo',
-    async query(ip) {
-      const d = await fetchJSON(`https://ip.useragentinfo.com/json?ip=${encodeURIComponent(ip)}`);
-      if (d.code !== 200 || !d.country) throw new Error('查询失败');
+      const d = await fetchJSON(`https://ipwho.is/${encodeURIComponent(ip)}`);
+      if (d.success === false) throw new Error(d.message || '查询失败');
       return {
         ip,
-        country: clean(d.country) ?? '未知',
-        region: clean(d.province),
+        country: countryNameZh(d.country_code, clean(d.country) ?? ''),
+        countryCode: clean(d.country_code),
+        region: clean(d.region),
         city: clean(d.city),
-        isp: clean(d.isp),
+        isp: clean(d.connection?.isp) ?? clean(d.connection?.org),
+        asn: clean(d.connection?.asn) ? `AS${d.connection.asn}` : undefined,
+        org: clean(d.connection?.org),
+        lat: typeof d.latitude === 'number' ? d.latitude : undefined,
+        lon: typeof d.longitude === 'number' ? d.longitude : undefined,
+        timezone: clean(d.timezone?.id) ?? clean(d.timezone?.utc),
+        zipcode: clean(d.postal),
         source: this.name,
         time: Date.now(),
       };
     },
   },
   {
-    // ipapi.co（国际兜底）
+    // ipapi.co（国际兜底，UTF-8）
     name: 'ipapi.co',
     async query(ip) {
       const d = await fetchJSON(`https://ipapi.co/${encodeURIComponent(ip)}/json/`);
@@ -172,7 +146,6 @@ export async function queryIp(ip: string): Promise<IpResult> {
 const MY_IP_SOURCES: Array<() => Promise<string>> = [
   async () => String((await fetchJSON('https://ipwho.is/')).ip ?? '').trim(),
   async () => String((await fetchJSON('https://api.ipify.org?format=json')).ip ?? '').trim(),
-  async () => (await (await fetch('https://api.ip.sb/ip')).text()).trim(),
   async () => String((await fetchJSON('https://ipapi.co/json/')).ip ?? '').trim(),
 ];
 

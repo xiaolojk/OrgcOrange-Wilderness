@@ -540,12 +540,10 @@ export class App {
 
       <div class="section-title">🌐 数据源（自动容错切换）</div>
       <div class="settings-card">
-        <div class="setting-row"><div class="setting-label">① 太平洋网络 whois.pconline.com.cn<div class="setting-sub">国内 · 中文 · 含运营商</div></div></div>
-        <div class="setting-row"><div class="setting-label">② ipwho.is<div class="setting-sub">国际 · HTTPS · 经纬度/ASN</div></div></div>
-        <div class="setting-row"><div class="setting-label">③ ip-api.com<div class="setting-sub">国际 · 中文 · 字段全</div></div></div>
-        <div class="setting-row"><div class="setting-label">④ 百度开放数据<div class="setting-sub">国内 · 中文</div></div></div>
-        <div class="setting-row"><div class="setting-label">⑤ UserAgentInfo<div class="setting-sub">国内 · 中文</div></div></div>
-        <div class="setting-row"><div class="setting-label">⑥ ipapi.co<div class="setting-sub">国际 · 兜底</div></div></div>
+        <div class="setting-row"><div class="setting-label">① vore.top<div class="setting-sub">国内 · HTTPS · 中文含运营商</div></div></div>
+        <div class="setting-row"><div class="setting-label">② ip-api.com<div class="setting-sub">国际 · 中文输出 · 字段全</div></div></div>
+        <div class="setting-row"><div class="setting-label">③ ipwho.is<div class="setting-sub">国际 · HTTPS · 经纬度/ASN</div></div></div>
+        <div class="setting-row"><div class="setting-label">④ ipapi.co<div class="setting-sub">国际 · 兜底</div></div></div>
       </div>
 
       <div class="about-box">
