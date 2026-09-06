@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">IP 归属地查询</string>
+    <string name="title_activity_main">IP 归属地查询</string>
+    <string name="package_name">com.ipgeo.query</string>
+    <string name="custom_url_scheme">com.ipgeo.query</string>
+</resources>

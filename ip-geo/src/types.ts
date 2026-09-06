@@ -1,79 +1,44 @@
-/** 查询来源 */
-export type ApiSource = 'auto' | 'ip-api' | 'ipwho';
+/* ================= 类型定义 ================= */
 
-/** 主题模式 */
-export type ThemeMode = 'auto' | 'light' | 'dark';
-
-/** 应用设置 */
-export interface Settings {
-  theme: ThemeMode;
-  apiSource: ApiSource;
-  historyLimit: number; // 0 = 不限制
-  haptics: boolean;
-}
-
-/** 统一的 IP 查询结果 */
+/** 统一的 IP 查询结果模型 */
 export interface IpResult {
   ip: string;
-  /** 国家（中文） */
   country: string;
-  countryCode: string;
-  /** 国旗 emoji */
-  flag: string;
-  /** 省/州 */
-  region: string;
-  /** 城市 */
-  city: string;
-  /** 区县 */
-  district?: string;
-  /** 运营商 */
-  isp: string;
-  /** 组织 */
-  org?: string;
-  /** ASN，如 AS4134 */
-  asn?: string;
+  countryCode?: string;   // ISO 两位国家码，用于国旗 emoji
+  region?: string;        // 省 / 州
+  city?: string;          // 市
+  district?: string;      // 区县（部分源有）
+  isp?: string;           // 运营商
+  asn?: string;           // AS 号，如 AS4134
+  org?: string;           // 组织名
   lat?: number;
   lon?: number;
-  /** 时区，如 Asia/Shanghai */
   timezone?: string;
-  /** UTC 偏移，如 +08:00 */
-  utcOffset?: string;
-  /** 邮编 */
-  zip?: string;
-  /** 是否移动网络 */
-  isMobile?: boolean;
-  /** 是否代理/VPN */
-  isProxy?: boolean;
-  /** 是否机房/托管 */
-  isHosting?: boolean;
-  /** 是否内网/保留地址（本地判断，不走 API） */
-  isPrivate: boolean;
-  /** 数据来源 */
-  source: string;
-  /** 查询时间戳 */
-  ts: number;
-  /** 域名解析注记（查域名时记录） */
-  domainNote?: string;
-  /** 查询失败时的错误信息 */
-  error?: string;
+  zipcode?: string;
+  source: string;         // 数据源名称
+  isPrivate?: boolean;    // 内网 / 保留地址
+  privateType?: string;   // 内网类型说明
+  time: number;           // 查询时间戳
 }
 
-/** 历史记录条目 */
-export interface HistoryItem extends IpResult {
-  /** 是否已收藏 */
-  starred: boolean;
+/** 历史/收藏条目 */
+export interface RecordItem {
+  result: IpResult;
+  favTime?: number;
 }
 
-/** 输入解析结果 */
-export interface ParsedInput {
-  kind: 'ipv4' | 'ipv6' | 'domain' | 'invalid' | 'empty';
-  value: string;
-  message?: string;
+export type ThemeMode = 'auto' | 'light' | 'dark';
+
+export interface AppSettings {
+  theme: ThemeMode;
+  haptics: boolean;       // 震动反馈
+  autoQueryOnPaste?: boolean;
 }
 
-export const DEFAULT_SETTINGS: Settings = {
-  theme: 'auto',
-  apiSource: 'auto',
-  historyLimit: 100,
-  haptics: true,
-};
+/** 查询目标解析结果 */
+export type QueryTarget =
+  | { kind: 'ipv4'; value: string }
+  | { kind: 'ipv6'; value: string }
+  | { kind: 'domain'; value: string }
+  | { kind: 'private'; value: string; type: string }
+  | { kind: 'invalid'; value: string };
